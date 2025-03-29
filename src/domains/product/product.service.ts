@@ -242,7 +242,7 @@ export class ProductService {
       });
 
       const proxySellerIds = new Set(
-        orders.map((order) => order.proxySellerId?.toString()),
+        orders.map((order) => order.proxySellerId),
       );
 
       if (type !== 'resident') {
@@ -285,7 +285,6 @@ export class ProductService {
           data: { items: filteredItems },
         };
       } else {
-        // Resident proxies
         const result: any[] = [];
 
         for (const proxySellerId of proxySellerIds) {
@@ -306,7 +305,7 @@ export class ProductService {
             result.push({
               login: proxy.login,
               password: proxy.password,
-              port: ports.join(','),
+              port: ports,
             });
           }
         }
@@ -329,17 +328,27 @@ export class ProductService {
     try {
       if (orderInfo.type !== 'resident') {
         const response = await this.proxySeller.post('/order/make', orderInfo);
-        return response.data.data.orderId;
+        return response.data.data.orderId.toString();
       } else {
+        const tariff = await this.convertToBytes(orderInfo.tariff as string);
         const response = await this.proxySeller.post(
           '/residentsubuser/create',
           {
             is_link_date: false,
             rotation: 1,
-            traffic_limit: this.convertToBytes(orderInfo.tariff as string),
+            traffic_limit: tariff.toString(),
             expired_at: this.getOneMonthLaterFormatted(),
           },
         );
+        await this.proxySeller.post('/residentsubuser/list/add', {
+          title: orderInfo.orderId,
+          package_key: response.data.data.package_key,
+          export: {
+            ports: 3,
+            ext: '',
+          },
+        });
+
         return response.data.data.package_key;
       }
     } catch (error) {

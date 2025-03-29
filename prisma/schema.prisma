@@ -79,7 +79,7 @@ model Order {
   goal          String
   totalPrice    Decimal
   promocode     String?
-  proxySellerId Int?
+  proxySellerId String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }

@@ -2,6 +2,7 @@ import { Proxy } from '@prisma/client';
 
 export interface OrderInfo {
   type: Proxy;
+  orderId?: string;
   protocol?: string | undefined;
   countryId?: number | undefined;
   periodId?: string | undefined;

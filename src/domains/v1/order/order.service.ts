@@ -177,6 +177,7 @@ export class OrderService {
     }
     const orderInfo: OrderInfo = {
       type: order.type,
+      orderId: order.id,
       paymentId: 1,
       tariff: order.tariff ? order.tariff : undefined,
       countryId: reference.country?.find(

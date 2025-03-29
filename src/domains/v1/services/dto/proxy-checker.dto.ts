@@ -11,11 +11,11 @@ export class CheckProxyDto {
   @ArrayNotEmpty()
   @IsString({ each: true })
   @Matches(
-    /^(([^:@\s]+:[^:@\s]+:[\d.]+:\d+)|([\d.]+:\d+)|(socks[45]:\/\/[^:@\s]+:[^:@\s]+@[\d.]+:\d+)|(socks[45]:\/\/[\d.]+:\d+))$/,
+    /^(([\d.]+:\d+(:[^:@\s]+:[^:@\s]+)?)|(socks[45]:\/\/[^:@\s]+:[^:@\s]+@[\d.]+:\d+)|(socks[45]:\/\/[\d.]+:\d+))$/,
     {
       each: true,
       message:
-        'Each proxy must be in format "user:pass:ip:port", "ip:port", or valid socks4/socks5 URI',
+        'Each proxy must be in format "ip:port:user:pass", "ip:port", or valid socks4/socks5 URI',
     },
   )
   proxies: string[];

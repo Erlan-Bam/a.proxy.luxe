@@ -27,7 +27,7 @@ export class ProxyCheckerService {
           } else {
             const parts = raw.split(':');
             if (parts.length === 4) {
-              [login, password, ip, port] = parts;
+              [ip, port, login, password] = parts;
               proxyUrl = `http://${login}:${password}@${ip}:${port}`;
             } else if (parts.length === 2) {
               [ip, port] = parts;

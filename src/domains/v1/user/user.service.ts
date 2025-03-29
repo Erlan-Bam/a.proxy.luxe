@@ -491,4 +491,11 @@ export class UserService {
 
     return await this.prisma.coupon.findMany();
   }
+  async deletePromocode(user: User, code: string) {
+    if (user.type !== UserType.ADMIN) {
+      throw new HttpException('Admins only', 403);
+    }
+
+    return await this.prisma.coupon.delete({ where: { code: code } });
+  }
 }

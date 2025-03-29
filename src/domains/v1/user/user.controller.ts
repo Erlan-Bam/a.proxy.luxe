@@ -5,6 +5,8 @@ import {
   Request,
   Post,
   Body,
+  Delete,
+  Param,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UserService } from './user.service';
@@ -44,9 +46,8 @@ export class UserController {
   }
 
   @Post('verify')
-  @UseGuards(AuthGuard('jwt'))
-  async verifyCode(@Body() data: { code: string }, @Request() request) {
-    return this.userService.setVerify(request.user.email, data.code);
+  async verifyCode(@Body() data: { code: string; email: string }) {
+    return this.userService.setVerify(data.email, data.code);
   }
 
   @Get('info')
@@ -87,5 +88,11 @@ export class UserController {
   @UseGuards(AuthGuard('jwt'))
   async getPromocode(@Request() req) {
     return this.userService.getPromocode(req.user);
+  }
+
+  @Delete('promocode/delete/:code')
+  @UseGuards(AuthGuard('jwt'))
+  async deletePromocode(@Request() req, @Param('code') code: string) {
+    return this.userService.deletePromocode(req.user, code);
   }
 }

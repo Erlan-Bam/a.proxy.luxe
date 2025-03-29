@@ -7,6 +7,7 @@ import { RemoveBalanceDTO } from './dto/remove-balance.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { BanUserDTO } from './dto/ban-user.dto';
 import { AddPromocodeDTO } from './dto/add-promo.dto';
+import { SupportMessageDto } from './dto/send-support.dto';
 
 @Injectable()
 export class UserService {
@@ -497,5 +498,73 @@ export class UserService {
     }
 
     return await this.prisma.coupon.delete({ where: { code: code } });
+  }
+  async sendSupportEmail(
+    dto: SupportMessageDto,
+  ): Promise<{ success: boolean }> {
+    const { name, email, support, message } = dto;
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Новое сообщение в поддержку</title>
+        <style>
+            body { font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; }
+            .container { max-width: 600px; background-color: #000; color: #fff; padding: 30px; border-radius: 8px; }
+            .field { margin-bottom: 20px; }
+            .label { font-weight: bold; color: #f3d675; }
+            .value { color: #ffffff; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2 style="text-align:center; color: #f3d675;">Новое сообщение от пользователя</h2>
+            <div class="field">
+                <div class="label">Имя:</div>
+                <div class="value">${name}</div>
+            </div>
+            <div class="field">
+                <div class="label">Email:</div>
+                <div class="value">${email}</div>
+            </div>
+            <div class="field">
+                <div class="label">Тип тех. поддержки:</div>
+                <div class="value">${support}</div>
+            </div>
+            <div class="field">
+                <div class="label">Сообщение:</div>
+                <div class="value">${message}</div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    const transporter = nodemailer.createTransport({
+      pool: true,
+      host: 'smtp.timeweb.ru',
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      debug: true,
+    });
+
+    const mailOptions: nodemailer.SendMailOptions = {
+      from: process.env.EMAIL_USER,
+      to: 'admin@proxy.luxe',
+      subject: 'Новое сообщение в поддержку',
+      html,
+    };
+
+    await transporter.sendMail(mailOptions);
+    return { success: true };
   }
 }

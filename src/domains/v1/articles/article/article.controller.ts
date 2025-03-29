@@ -22,11 +22,11 @@ import { AdminGuard } from '../../auth/guards/admin.guard';
 import { baseUrl } from 'src/main';
 
 @Controller('v1/articles')
-@UseGuards(AuthGuard('jwt'), AdminGuard)
 export class ArticleController {
   constructor(private readonly articleService: ArticleService) {}
 
   @Post()
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
   @UseInterceptors(
     FilesInterceptor('images', 10, {
       storage: diskStorage({
@@ -63,11 +63,13 @@ export class ArticleController {
   }
 
   @Patch(':id')
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
   update(@Param('id') id: string, @Body() updateArticleDto: UpdateArticleDto) {
     return this.articleService.update(id, updateArticleDto);
   }
 
   @Delete(':id')
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
   remove(@Param('id') id: string) {
     return this.articleService.remove(id);
   }

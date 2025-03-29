@@ -15,6 +15,7 @@ import { AddBalanceDTO } from './dto/add-balance.dto';
 import { RemoveBalanceDTO } from './dto/remove-balance.dto';
 import { BanUserDTO } from './dto/ban-user.dto';
 import { AddPromocodeDTO } from './dto/add-promo.dto';
+import { SupportMessageDto } from './dto/send-support.dto';
 
 @Controller('v1/user')
 export class UserController {
@@ -94,5 +95,10 @@ export class UserController {
   @UseGuards(AuthGuard('jwt'))
   async deletePromocode(@Request() req, @Param('code') code: string) {
     return this.userService.deletePromocode(req.user, code);
+  }
+
+  @Post('send-support')
+  async sendSupportEmail(@Body() data: SupportMessageDto) {
+    return this.userService.sendSupportEmail(data);
   }
 }

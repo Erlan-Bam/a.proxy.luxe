@@ -223,7 +223,7 @@ export class ProductService {
 
       return price;
     } else {
-      const price = type === 'ipv6' ? 0.1 : 2.4;
+      const price = type === 'ipv6' ? 0.08 : 2.4;
       const totalPrice = price * quantity;
 
       return totalPrice;

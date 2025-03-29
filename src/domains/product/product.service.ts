@@ -305,14 +305,14 @@ export class ProductService {
             result.push({
               login: proxy.login,
               password: proxy.password,
-              port: ports,
+              ports: ports,
             });
           }
         }
 
         return {
           status: 'success',
-          data: result,
+          data: { items: result },
         };
       }
     } catch (error) {
@@ -340,11 +340,12 @@ export class ProductService {
             expired_at: this.getOneMonthLaterFormatted(),
           },
         );
+        console.log(response.data);
         await this.proxySeller.post('/residentsubuser/list/add', {
           title: orderInfo.orderId,
           package_key: response.data.data.package_key,
           export: {
-            ports: 3,
+            ports: orderInfo.quantity,
             ext: '',
           },
         });

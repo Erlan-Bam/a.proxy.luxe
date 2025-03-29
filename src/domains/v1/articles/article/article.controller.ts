@@ -8,12 +8,18 @@ import {
   Delete,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { ArticleService } from './article.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard } from '../../auth/guards/admin.guard';
+import { baseUrl } from 'src/main';
 
 @Controller('v1/articles')
 @UseGuards(AuthGuard('jwt'), AdminGuard)
@@ -21,7 +27,26 @@ export class ArticleController {
   constructor(private readonly articleService: ArticleService) {}
 
   @Post()
-  create(@Body() createArticleDto: CreateArticleDto) {
+  @UseInterceptors(
+    FilesInterceptor('images', 10, {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
+  create(
+    @UploadedFiles() files: any[],
+    @Body() createArticleDto: CreateArticleDto,
+  ) {
+    const imageUrls = files.map(
+      (file) => `${baseUrl}/uploads/${file.filename}`,
+    );
+    createArticleDto.images = imageUrls;
     return this.articleService.create(createArticleDto);
   }
 

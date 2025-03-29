@@ -10,6 +10,7 @@ export class CreateArticleDto {
   content: string;
 
   @IsOptional()
-  @IsString()
-  image?: string;
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
 }

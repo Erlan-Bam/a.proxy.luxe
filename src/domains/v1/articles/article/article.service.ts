@@ -12,7 +12,7 @@ export class ArticleService {
       data: {
         title: createArticleDto.title,
         content: createArticleDto.content,
-        image: createArticleDto.image,
+        images: createArticleDto.images,
       },
     });
   }
@@ -44,7 +44,7 @@ export class ArticleService {
       data: {
         title: updateArticleDto.title ?? article.title,
         content: updateArticleDto.content ?? article.content,
-        image: updateArticleDto.image ?? article.image,
+        images: updateArticleDto.images ?? article.images,
       },
     });
   }

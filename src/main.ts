@@ -1,10 +1,22 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './domains/app.module';
 import { ValidationPipe } from '@nestjs/common';
+import * as bodyParser from 'body-parser';
+
+export const baseUrl =
+  process.env.NODE_ENV === 'production'
+    ? 'https://api.proxy.luxe'
+    : 'http://localhost:6001';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // 📦 Увеличиваем лимит на JSON и form-data
+  app.use(bodyParser.json({ limit: '50mb' }));
+  app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
   app.setGlobalPrefix('api');
+
   app.enableCors({
     origin: [
       'http://localhost:3000',

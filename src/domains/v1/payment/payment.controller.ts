@@ -53,12 +53,7 @@ export class PaymentController {
     @Request() req,
     @Response() res,
   ) {
-    console.log('🔹 Received payment request', { userId, amount, body });
-
     if (!body || Object.keys(body).length === 0) {
-      console.warn(
-        '⚠️ Received empty body, returning success without processing.',
-      );
       return res
         .status(200)
         .send({ message: 'Payment received but no data provided.' });
@@ -120,7 +115,6 @@ export class PaymentController {
 
   @Post('payeer/success')
   async payeerSuccessfulPayment(@Request() request) {
-    console.log(request);
     await this.paymentService.successfulPayment(
       request.body.m_orderid,
       Number(request.body.m_amount),
@@ -154,7 +148,14 @@ export class PaymentController {
     const payment = await axios.get(
       `https://api.digiseller.com/api/purchases/unique-code/${code}?token=${response.data.token}`,
     );
-    console.log(payment);
+    console.log(payment.data);
+    const options = payment.data.options;
+    console.log(options[0].value, payment.data.amount_usd);
+
+    await this.paymentService.successfulPayment(
+      options[0].value,
+      payment.data.amount_usd,
+    );
     return { ok: true };
   }
 }

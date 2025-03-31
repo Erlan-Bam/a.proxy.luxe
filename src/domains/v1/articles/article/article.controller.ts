@@ -64,7 +64,30 @@ export class ArticleController {
 
   @Patch(':id')
   @UseGuards(AuthGuard('jwt'), AdminGuard)
-  update(@Param('id') id: string, @Body() updateArticleDto: UpdateArticleDto) {
+  @UseInterceptors(
+    FilesInterceptor('images', 10, {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+    }),
+  )
+  update(
+    @Param('id') id: string,
+    @UploadedFiles() files: any[],
+    @Body() updateArticleDto: UpdateArticleDto,
+  ) {
+    if (files?.length) {
+      const imageUrls = files.map(
+        (file) => `${baseUrl}/uploads/${file.filename}`,
+      );
+      updateArticleDto.images = imageUrls;
+    }
+
     return this.articleService.update(id, updateArticleDto);
   }
 

@@ -505,41 +505,149 @@ export class UserService {
     const { name, email, support, message } = dto;
 
     const html = `
-    <!DOCTYPE html>
-    <html lang="ru">
-    <head>
-        <meta charset="UTF-8" />
-        <title>Новое сообщение в поддержку</title>
-        <style>
-            body { font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; }
-            .container { max-width: 600px; background-color: #000; color: #fff; padding: 30px; border-radius: 8px; }
-            .field { margin-bottom: 20px; }
-            .label { font-weight: bold; color: #f3d675; }
-            .value { color: #ffffff; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h2 style="text-align:center; color: #f3d675;">Новое сообщение от пользователя</h2>
-            <div class="field">
-                <div class="label">Имя:</div>
-                <div class="value">${name}</div>
-            </div>
-            <div class="field">
-                <div class="label">Email:</div>
-                <div class="value">${email}</div>
-            </div>
-            <div class="field">
-                <div class="label">Тип тех. поддержки:</div>
-                <div class="value">${support}</div>
-            </div>
-            <div class="field">
-                <div class="label">Сообщение:</div>
-                <div class="value">${message}</div>
-            </div>
-        </div>
-    </body>
-    </html>
+      <!DOCTYPE html>
+      <html lang="ru">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Новое сообщение в поддержку - PROXY.LUXE</title>
+          <style type="text/css">
+              body {
+                  margin: 0;
+                  padding: 0;
+                  font-family: Arial, sans-serif;
+                  background-color: #f5f5f5;
+              }
+              .email-container {
+                  max-width: 600px;
+              }
+          </style>
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+          <!-- Email Container -->
+          <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f5f5f5; padding: 20px;">
+              <tr>
+                  <td align="center">
+                      <table class="email-container" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #000000; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                          <!-- Header -->
+                          <tr>
+                              <td align="center" style="padding: 25px 0; background-color: #000000; border-bottom: 2px solid #f3d675;">
+                                  <table border="0" cellpadding="0" cellspacing="0" width="90%">
+                                      <tr>
+                                          <td align="center">
+                                              <table border="0" cellpadding="0" cellspacing="0">
+                                                  <tr>
+                                                      <td align="center">
+                                                          <img src="https://iili.io/3zxnwpn.th.png" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;">
+                                                          <span style="font-size: 26px; font-weight: bold; color: #f3d675; letter-spacing: 1px; vertical-align: middle;">PROXY.LUXE</span>
+                                                      </td>
+                                                  </tr>
+                                              </table>
+                                          </td>
+                                      </tr>
+                                  </table>
+                              </td>
+                          </tr>
+                          <!-- Content -->
+                          <tr>
+                              <td style="padding: 35px 30px; background-color: #000000; color: #ffffff;">
+                                  <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                      <tr>
+                                          <td style="padding-bottom: 25px; font-size: 24px; font-weight: bold; color: #f3d675; text-align: center; text-transform: uppercase; letter-spacing: 1px;">
+                                              Новое сообщение от пользователя
+                                          </td>
+                                      </tr>
+                                      <tr>
+                                          <td style="padding-bottom: 30px;">
+                                              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: rgba(243, 214, 117, 0.08); border: 1px solid rgba(243, 214, 117, 0.4); border-radius: 6px; padding: 0;">
+                                                  <tr>
+                                                      <td style="padding: 20px;">
+                                                          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                                              <tr>
+                                                                  <td style="padding: 12px 15px; background-color: rgba(243, 214, 117, 0.15); border-radius: 4px; margin-bottom: 15px; display: block;">
+                                                                      <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                                                          <tr>
+                                                                              <td style="font-weight: bold; color: #f3d675; font-size: 16px; padding-bottom: 5px;">Имя:</td>
+                                                                          </tr>
+                                                                          <tr>
+                                                                              <td style="color: #ffffff; font-size: 16px; padding-left: 10px;">${name}</td>
+                                                                          </tr>
+                                                                      </table>
+                                                                  </td>
+                                                              </tr>
+                                                              <tr>
+                                                                  <td height="15"></td>
+                                                              </tr>
+                                                              <tr>
+                                                                  <td style="padding: 12px 15px; background-color: rgba(243, 214, 117, 0.15); border-radius: 4px; margin-bottom: 15px; display: block;">
+                                                                      <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                                                          <tr>
+                                                                              <td style="font-weight: bold; color: #f3d675; font-size: 16px; padding-bottom: 5px;">Email:</td>
+                                                                          </tr>
+                                                                          <tr>
+                                                                              <td style="color: #ffffff; font-size: 16px; padding-left: 10px;">${email}</td>
+                                                                          </tr>
+                                                                      </table>
+                                                                  </td>
+                                                              </tr>
+                                                              <tr>
+                                                                  <td height="15"></td>
+                                                              </tr>
+                                                              <tr>
+                                                                  <td style="padding: 12px 15px; background-color: rgba(243, 214, 117, 0.15); border-radius: 4px; margin-bottom: 15px; display: block;">
+                                                                      <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                                                          <tr>
+                                                                              <td style="font-weight: bold; color: #f3d675; font-size: 16px; padding-bottom: 5px;">Тип тех. поддержки:</td>
+                                                                          </tr>
+                                                                          <tr>
+                                                                              <td style="color: #ffffff; font-size: 16px; padding-left: 10px;">${support}</td>
+                                                                          </tr>
+                                                                      </table>
+                                                                  </td>
+                                                              </tr>
+                                                              <tr>
+                                                                  <td height="15"></td>
+                                                              </tr>
+                                                              <tr>
+                                                                  <td style="padding: 12px 15px; background-color: rgba(243, 214, 117, 0.15); border-radius: 4px; display: block;">
+                                                                      <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                                                          <tr>
+                                                                              <td style="font-weight: bold; color: #f3d675; font-size: 16px; padding-bottom: 5px;">Сообщение:</td>
+                                                                          </tr>
+                                                                          <tr>
+                                                                              <td style="color: #ffffff; font-size: 16px; padding-left: 10px; line-height: 1.6;">${message}</td>
+                                                                          </tr>
+                                                                      </table>
+                                                                  </td>
+                                                              </tr>
+                                                          </table>
+                                                      </td>
+                                                  </tr>
+                                              </table>
+                                          </td>
+                                      </tr>
+                                  </table>
+                              </td>
+                          </tr>
+                          
+                          <!-- Footer -->
+                          <tr>
+                              <td style="padding: 15px 30px; background-color: rgba(243, 214, 117, 0.08); border-top: 2px solid #f3d675;">
+                                  <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                      <tr>
+                                          <td style="color: #f3d675; font-size: 14px; text-align: center;">
+                                              © 2025 PROXY.LUXE
+                                          </td>
+                                      </tr>
+                                  </table>
+                              </td>
+                          </tr>
+                      </table>
+                  </td>
+              </tr>
+          </table>
+      </body>
+      </html>
     `;
 
     const transporter = nodemailer.createTransport({

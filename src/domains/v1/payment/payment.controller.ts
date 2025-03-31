@@ -8,28 +8,41 @@ import {
   ParseFloatPipe,
   Get,
   UseGuards,
+  HttpStatus,
+  HttpCode,
+  Param,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentService } from './payment.service';
 import * as crypto from 'crypto';
 import { AuthGuard } from '@nestjs/passport';
 import { CreateInvoicePayeer } from './dto/create-invoice-payeer.dto';
+import { DigisellerPaymentDto } from './dto/digiseller-payment-init.dto';
+import axios from 'axios';
+import { timestamp } from 'rxjs';
 
 @Controller('v1/payment')
 export class PaymentController {
   private readonly secretKey: string;
+  private readonly digisellerApiKey: string;
 
   constructor(
     private readonly paymentService: PaymentService,
-    private readonly configService: ConfigService, // Inject ConfigService
+    private readonly configService: ConfigService,
   ) {
     const secret_key = this.configService.get<string>('WEBMONEY_SECRET_KEY');
+    const digiseller_api_key =
+      this.configService.get<string>('DIGISELLER_API_KEY');
 
     if (!secret_key) {
       throw new Error('Missing WEBMONEY_SECRET_KEY in config');
     }
+    if (!digiseller_api_key) {
+      throw new Error('Missing DIGISELLER_API_KEY in config');
+    }
 
     this.secretKey = secret_key;
+    this.digisellerApiKey = digiseller_api_key;
   }
 
   @Post('success')
@@ -118,5 +131,30 @@ export class PaymentController {
   @UseGuards(AuthGuard('jwt'))
   async getPaymentHistory(@Request() request) {
     return await this.paymentService.getPaymentHistory(request.user.id);
+  }
+
+  @Get('digiseller/success')
+  @HttpCode(200)
+  async digisellerPayment(@Query('uniquecode') code: string, @Request() req) {
+    console.log('Received body:', code);
+    console.log('Request', req);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = crypto
+      .createHash('sha256')
+      .update('' + this.digisellerApiKey + timestamp)
+      .digest('hex');
+    const response = await axios.post(
+      'https://api.digiseller.com/api/apilogin',
+      {
+        seller_id: 668379,
+        timestamp: Math.floor(Date.now() / 1000),
+        sign: signature,
+      },
+    );
+    const payment = await axios.get(
+      `https://api.digiseller.com/api/purchases/unique-code/${code}?token=${response.data.token}`,
+    );
+    console.log(payment);
+    return { ok: true };
   }
 }

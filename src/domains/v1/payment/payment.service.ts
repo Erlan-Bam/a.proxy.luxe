@@ -29,7 +29,6 @@ export class PaymentService {
     this.merchant_id = configService.get<string>(
       'PAYEER_MERCHANT_ID',
     ) as string;
-    console.log(this.account, this.api_id, this.api_pass, this.merchant_id);
   }
 
   async createInvoicePayeer(data: CreateInvoicePayeer): Promise<Object> {

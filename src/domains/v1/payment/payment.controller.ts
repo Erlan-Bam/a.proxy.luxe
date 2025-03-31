@@ -130,8 +130,6 @@ export class PaymentController {
   @Get('digiseller/success')
   @HttpCode(200)
   async digisellerPayment(@Query('uniquecode') code: string, @Request() req) {
-    console.log('Received body:', code);
-    console.log('Request', req);
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = crypto
       .createHash('sha256')
@@ -148,9 +146,7 @@ export class PaymentController {
     const payment = await axios.get(
       `https://api.digiseller.com/api/purchases/unique-code/${code}?token=${response.data.token}`,
     );
-    console.log(payment.data);
     const options = payment.data.options;
-    console.log(options[0].value, payment.data.amount_usd);
 
     await this.paymentService.successfulPayment(
       options[0].value,

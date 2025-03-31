@@ -8,7 +8,6 @@ import { IncomingHttpHeaders } from 'http';
 export class IpService {
   async getIpInfo(@Req() req): Promise<IpInfoDto> {
     const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    console.log(ip);
 
     try {
       // Запрос к API для получения информации о IP

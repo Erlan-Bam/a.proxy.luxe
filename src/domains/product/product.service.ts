@@ -340,7 +340,6 @@ export class ProductService {
             expired_at: this.getOneMonthLaterFormatted(),
           },
         );
-        console.log(response.data);
         await this.proxySeller.post('/residentsubuser/list/add', {
           title: orderInfo.orderId,
           package_key: response.data.data.package_key,
@@ -353,7 +352,6 @@ export class ProductService {
         return response.data.data.package_key;
       }
     } catch (error) {
-      console.log(error);
       throw new HttpException('Failed to place an order', 500);
     }
   }

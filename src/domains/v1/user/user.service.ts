@@ -78,7 +78,7 @@ export class UserService {
                                                 <table border="0" cellpadding="0" cellspacing="0">
                                                     <tr>
                                                         <td align="center" style="display: flex; align-items: center; justify-content: center;">
-                                                            <img src="https://iili.io/3zxnwpn.th.png" width="30px" height="30px" style="margin-right: 8px">
+                                                            <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="30px" height="30px" style="margin-right: 8px">
                                                             <div style="font-size: 24px; font-weight: bold; color: #f3d675; letter-spacing: 1px;">PROXY.LUXE</div>
                                                         </td>
                                                     </tr>
@@ -184,7 +184,7 @@ export class UserService {
                                                 <table border="0" cellpadding="0" cellspacing="0">
                                                     <tr>
                                                         <td align="center" style="display: flex; align-items: center; justify-content: center;">
-                                                            <img src="https://iili.io/3zxnwpn.th.png" width="30px" height="30px" style="margin-right: 8px">
+                                                            <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="30px" height="30px" style="margin-right: 8px">
                                                             <div style="font-size: 24px; font-weight: bold; color: #f3d675; letter-spacing: 1px;">PROXY.LUXE</div>
                                                         </td>
                                                     </tr>
@@ -384,75 +384,96 @@ export class UserService {
     });
   }
   async sendProxyEmail(email: string, lang: string = 'en'): Promise<any> {
+    const expirationDate = new Date();
+    expirationDate.setMonth(expirationDate.getMonth() + 1);
+
+    const formattedDate = expirationDate
+      .toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-GB')
+      .replace(/\//g, '.');
+
+    const expirationText =
+      lang === 'ru'
+        ? `Срок действия прокси: до ${formattedDate}`
+        : `Proxy valid until: ${formattedDate}`;
+
     const emailTemplate =
       lang === 'ru'
         ? `
-    <!DOCTYPE html>
-    <html lang="ru">
-    <head>
-      <meta charset="UTF-8" />
-      <title>Покупка прокси - PROXY.LUXE</title>
-    </head>
-    <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
-      <table align="center" width="100%" style="max-width:600px; background-color: #000000; border-radius: 8px; color: white; padding: 30px;">
-        <tr>
-          <td align="center" style="font-size: 24px; font-weight: bold; color: #f3d675;">PROXY.LUXE</td>
-        </tr>
-        <tr>
-          <td style="padding-top: 20px; text-align: center;">
-            Спасибо за покупку! Ваши прокси скоро будут доступны в личном кабинете.
-          </td>
-        </tr>
-        <tr>
-          <td align="center" style="padding: 30px 0;">
-            <a href="https://proxy.luxe/ru/personal-account" style="background-color: #f3d675; color: #000000; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold;">
-              Перейти в личный кабинет
-            </a>
-          </td>
-        </tr>
-        <tr>
-          <td style="text-align: center; font-size: 14px; color: #999;">
-            Если возникли вопросы, напишите нам: <a href="mailto:admin@proxy.luxe" style="color: #f3d675;">admin@proxy.luxe</a>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-    `
+      <!DOCTYPE html>
+      <html lang="ru">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Покупка прокси - PROXY.LUXE</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
+        <table align="center" width="100%" style="max-width:600px; background-color: #000000; border-radius: 8px; color: white; padding: 30px;">
+          <tr>
+            <td align="center" style="font-size: 24px; font-weight: bold; color: #f3d675;">PROXY.LUXE</td>
+          </tr>
+          <tr>
+            <td style="padding-top: 20px; text-align: center;">
+              Спасибо за покупку! Ваши прокси скоро будут доступны в личном кабинете.
+            </td>
+          </tr>
+          <tr>
+            <td style="padding-top: 10px; text-align: center; font-weight: bold;">
+              ${expirationText}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding: 30px 0;">
+              <a href="https://proxy.luxe/ru/personal-account" style="background-color: #f3d675; color: #000000; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold;">
+                Перейти в личный кабинет
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="text-align: center; font-size: 14px; color: #999;">
+              Если возникли вопросы, напишите нам: <a href="mailto:admin@proxy.luxe" style="color: #f3d675;">admin@proxy.luxe</a>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+      `
         : `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <title>Proxy Purchase - PROXY.LUXE</title>
-    </head>
-    <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
-      <table align="center" width="100%" style="max-width:600px; background-color: #000000; border-radius: 8px; color: white; padding: 30px;">
-        <tr>
-          <td align="center" style="font-size: 24px; font-weight: bold; color: #f3d675;">PROXY.LUXE</td>
-        </tr>
-        <tr>
-          <td style="padding-top: 20px; text-align: center;">
-            Thank you for your purchase! Your proxies will soon be available in your dashboard.
-          </td>
-        </tr>
-        <tr>
-          <td align="center" style="padding: 30px 0;">
-            <a href="https://proxy.luxe/en/personal-account" style="background-color: #f3d675; color: #000000; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold;">
-              Go to Dashboard
-            </a>
-          </td>
-        </tr>
-        <tr>
-          <td style="text-align: center; font-size: 14px; color: #999;">
-            If you have any questions, contact us at <a href="mailto:admin@proxy.luxe" style="color: #f3d675;">admin@proxy.luxe</a>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-    `;
-
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Proxy Purchase - PROXY.LUXE</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
+        <table align="center" width="100%" style="max-width:600px; background-color: #000000; border-radius: 8px; color: white; padding: 30px;">
+          <tr>
+            <td align="center" style="font-size: 24px; font-weight: bold; color: #f3d675;">PROXY.LUXE</td>
+          </tr>
+          <tr>
+            <td style="padding-top: 20px; text-align: center;">
+              Thank you for your purchase! Your proxies will soon be available in your dashboard.
+            </td>
+          </tr>
+          <tr>
+            <td style="padding-top: 10px; text-align: center; font-weight: bold;">
+              ${expirationText}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding: 30px 0;">
+              <a href="https://proxy.luxe/en/personal-account" style="background-color: #f3d675; color: #000000; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold;">
+                Go to Dashboard
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="text-align: center; font-size: 14px; color: #999;">
+              If you have any questions, contact us at <a href="mailto:admin@proxy.luxe" style="color: #f3d675;">admin@proxy.luxe</a>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+      `;
     const transporter = nodemailer.createTransport({
       pool: true,
       host: 'smtp.timeweb.ru',
@@ -538,7 +559,7 @@ export class UserService {
                                               <table border="0" cellpadding="0" cellspacing="0">
                                                   <tr>
                                                       <td align="center">
-                                                          <img src="https://iili.io/3zxnwpn.th.png" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;">
+                                                          <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;">
                                                           <span style="font-size: 26px; font-weight: bold; color: #f3d675; letter-spacing: 1px; vertical-align: middle;">PROXY.LUXE</span>
                                                       </td>
                                                   </tr>

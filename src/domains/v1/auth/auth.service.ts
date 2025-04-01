@@ -228,7 +228,7 @@ export class AuthService {
                                                     <table border="0" cellpadding="0" cellspacing="0">
                                                         <tr>
                                                             <td align="center" style="display: flex; align-items: center; justify-content: center;">
-                                                                <img src="https://iili.io/3zxnwpn.th.png" width="30px" height="30px" style="margin-right: 8px">
+                                                                <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="30px" height="30px" style="margin-right: 8px">
                                                                 <div style="font-size: 24px; font-weight: bold; color: #f3d675; letter-spacing: 1px;">PROXY.LUXE</div>
                                                             </td>
                                                         </tr>
@@ -334,7 +334,7 @@ export class AuthService {
                                                 <table border="0" cellpadding="0" cellspacing="0">
                                                     <tr>
                                                         <td align="center" style="display: flex; align-items: center; justify-content: center;">
-                                                            <img src="https://iili.io/3zxnwpn.th.png" width="30px" height="30px" style="margin-right: 8px">
+                                                            <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="30px" height="30px" style="margin-right: 8px">
                                                             <div style="font-size: 24px; font-weight: bold; color: #f3d675; letter-spacing: 1px;">PROXY.LUXE</div>
                                                         </td>
                                                     </tr>

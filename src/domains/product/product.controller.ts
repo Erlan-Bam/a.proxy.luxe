@@ -7,10 +7,12 @@ import {
   Query,
   UseGuards,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CalcRequestDTO, CalcResidentRequestDTO } from './dto/request.dto';
 import { AuthGuard } from '@nestjs/passport';
+import { UserType } from '@prisma/client';
 
 @Controller('/v1/products')
 export class ProductController {
@@ -47,9 +49,16 @@ export class ProductController {
     return await this.productService.getActiveProxyList(req.user.id, type);
   }
 
-  // @Post('prolong')
-  // @UseGuards(AuthGuard('jwt'))
-  // async prolongProxy(@Body() data: {}) {
-  //   return await this.productService.prolongProxy(data);
-  // }
+  @Get('admin/user-proxy/:type')
+  @UseGuards(AuthGuard('jwt'))
+  async getUserProxyList(
+    @Query('userId') userId: string,
+    @Param('type') type: string,
+    @Request() request,
+  ) {
+    if (request.user.role !== UserType.ADMIN) {
+      throw new ForbiddenException('Access denied: Admins only');
+    }
+    return await this.productService.getActiveProxyList(userId, type);
+  }
 }

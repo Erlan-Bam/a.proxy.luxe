@@ -287,14 +287,24 @@ export class ProductService {
       } else {
         const result: any[] = [];
 
+        const trafficResponse = await this.proxySeller.get(
+          `/residentsubuser/packages`,
+        );
+
+        const packages = trafficResponse.data.data.items ?? [];
+        console.log(packages);
+
         for (const proxySellerId of proxySellerIds) {
           const response = await this.proxySeller.get(
             `/residentsubuser/lists?package_key=${proxySellerId}`,
           );
-
           if (response.data.status !== 'success') continue;
 
           const proxies = response.data.data;
+
+          const matchedPackage = packages.find(
+            (pkg) => pkg.package_key === proxySellerId,
+          );
 
           for (const proxy of proxies) {
             const ports: number[] = [];
@@ -306,6 +316,7 @@ export class ProductService {
               login: proxy.login,
               password: proxy.password,
               ports: ports,
+              package_info: matchedPackage ?? null,
             });
           }
         }

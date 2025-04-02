@@ -129,7 +129,11 @@ export class PaymentController {
 
   @Get('digiseller/success')
   @HttpCode(200)
-  async digisellerPayment(@Query('uniquecode') code: string, @Request() req) {
+  async digisellerPayment(
+    @Query('uniquecode') code: string,
+    @Request() req,
+    @Response() res,
+  ) {
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = crypto
       .createHash('sha256')
@@ -143,15 +147,31 @@ export class PaymentController {
         sign: signature,
       },
     );
-    const payment = await axios.get(
-      `https://api.digiseller.com/api/purchases/unique-code/${code}?token=${response.data.token}`,
-    );
-    const options = payment.data.options;
+    let userId: string;
+    let amount: number;
+    let lang: string = 'en';
+    try {
+      const payment = await axios.get(
+        `https://api.digiseller.com/api/purchases/unique-code/${code}?token=${response.data.token}`,
+      );
+      const options = payment.data.options;
 
-    await this.paymentService.successfulPayment(
-      options[0].value,
-      payment.data.amount_usd,
+      userId = options[0].value;
+      amount = payment.data.amount_usd;
+      lang = payment.data.lang;
+    } catch {
+      const payment = await axios.get(
+        `https://oplata.info/api/purchases/unique-code/${code}?token=${response.data.token}`,
+      );
+      const options = payment.data.options;
+
+      userId = options[0].value;
+      amount = payment.data.amount_usd;
+      lang = payment.data.lang;
+    }
+    await this.paymentService.successfulPayment(userId, amount);
+    return res.redirect(
+      `https://proxy.luxe/${lang.startsWith('ru') ? 'ru' : 'en'}/personal-account`,
     );
-    return { ok: true };
   }
 }

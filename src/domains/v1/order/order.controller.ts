@@ -8,11 +8,13 @@ import {
   Request,
   Query,
   Delete,
+  ForbiddenException,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FinishOrderDto } from './dto/payment-order.dto';
 import { AuthGuard } from '@nestjs/passport';
+import { UserType } from '@prisma/client';
 
 @Controller('v1/orders')
 @UseGuards(AuthGuard('jwt'))
@@ -51,6 +53,15 @@ export class OrderController {
         ?.split('-')[0]
         ?.toLowerCase() || 'en';
     return this.orderService.finishOrder(finishDto, lang);
+  }
+
+  @Get('admin/:userId')
+  @UseGuards(AuthGuard('jwt'))
+  findOrdersByUserId(@Param('userId') userId: string, @Request() request) {
+    if (request.user.type !== UserType.ADMIN) {
+      throw new ForbiddenException('Access denied: Admins only');
+    }
+    return this.orderService.findOrdersByUserId(userId);
   }
 
   @Delete(':id')

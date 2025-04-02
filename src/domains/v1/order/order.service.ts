@@ -215,6 +215,13 @@ export class OrderService {
     };
   }
 
+  async findOrdersByUserId(userId: string) {
+    return await this.prisma.order.findMany({
+      where: { userId: userId, proxySellerId: { not: null } },
+      select: { proxySellerId: true },
+    });
+  }
+
   async checkPromocode(promocode: string) {
     const coupon = await this.prisma.coupon.findUnique({
       where: { code: promocode },

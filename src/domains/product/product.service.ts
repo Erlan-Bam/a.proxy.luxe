@@ -298,9 +298,6 @@ export class ProductService {
             `/residentsubuser/lists?package_key=${proxySellerId}`,
           );
           if (response.data.status !== 'success') {
-            await this.prisma.order.deleteMany({
-              where: { userId: userId, proxySellerId: proxySellerId },
-            });
             continue;
           }
 

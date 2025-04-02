@@ -56,7 +56,7 @@ export class ProductController {
     @Param('type') type: string,
     @Request() request,
   ) {
-    if (request.user.role !== UserType.ADMIN) {
+    if (request.user.type !== UserType.ADMIN) {
       throw new ForbiddenException('Access denied: Admins only');
     }
     return await this.productService.getActiveProxyList(userId, type);

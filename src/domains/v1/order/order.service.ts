@@ -64,9 +64,6 @@ export class OrderService {
         throw new HttpException('Invalid tariffs', 400);
       }
     }
-    if (createOrderDto.type === 'resident') {
-      createOrderDto.quantity = 1;
-    }
 
     const totalPrice = await this.productService.getCalcForOrder(
       createOrderDto.type,

@@ -291,14 +291,18 @@ export class ProductService {
           `/residentsubuser/packages`,
         );
 
-        const packages = trafficResponse.data.data.items ?? [];
-        console.log(packages);
+        const packages = trafficResponse.data.data ?? [];
 
         for (const proxySellerId of proxySellerIds) {
           const response = await this.proxySeller.get(
             `/residentsubuser/lists?package_key=${proxySellerId}`,
           );
-          if (response.data.status !== 'success') continue;
+          if (response.data.status !== 'success') {
+            await this.prisma.order.deleteMany({
+              where: { userId: userId, proxySellerId: proxySellerId },
+            });
+            continue;
+          }
 
           const proxies = response.data.data;
 

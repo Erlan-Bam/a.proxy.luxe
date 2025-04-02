@@ -53,6 +53,9 @@ export class PaymentController {
     @Request() req,
     @Response() res,
   ) {
+    console.log('Received body', body);
+    console.log('userId', userId);
+    console.log('amount', amount);
     if (!body || Object.keys(body).length === 0) {
       return res
         .status(200)

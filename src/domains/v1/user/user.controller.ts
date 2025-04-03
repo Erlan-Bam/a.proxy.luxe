@@ -27,6 +27,7 @@ export class UserController {
     const user = request.user as User;
 
     return {
+      id: user.id,
       email: user.email,
       balance: user.balance,
       isVerified: user.isVerified,

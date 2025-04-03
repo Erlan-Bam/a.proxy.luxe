@@ -18,6 +18,8 @@ import { OrderInfo } from './dto/order.dto';
 import { PrismaService } from '../v1/shared/prisma.service';
 import * as path from 'path';
 import * as fs from 'fs';
+import { ModifyProxyResidentDto } from './dto/modify-proxy.dto';
+import { title } from 'process';
 
 @Injectable()
 export class ProductService {
@@ -367,6 +369,26 @@ export class ProductService {
       throw new HttpException('Failed to place an order', 500);
     }
   }
+  async modifyProxyResident(data: ModifyProxyResidentDto) {
+    const response = await this.proxySeller.post('residentsubuser/list/add', {
+      title: data.title,
+      rotation: data.rotation,
+      whitelist: data.whitelist,
+      export: {
+        ports: data.ports,
+      },
+      package_key: data.package_key,
+    });
+
+    if (response.data.status !== 'success') {
+      throw new HttpException('Failed to modify proxy resident', 400);
+    }
+
+    return {
+      status: 'success',
+    };
+  }
+
   async convertToBytes(tariff: string): Promise<number> {
     const [valueStr, unitRaw] = tariff.trim().split(/\s+/);
     const value = parseFloat(valueStr);

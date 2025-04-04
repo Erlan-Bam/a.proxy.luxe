@@ -387,7 +387,7 @@ export class ProductService {
     });
 
     if (response.data.status !== 'success') {
-      throw new HttpException('Failed to modify proxy resident', 400);
+      throw new HttpException(response.data.errors[0].message, 400);
     }
 
     return {

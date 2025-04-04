@@ -25,11 +25,6 @@ class GeoDTO {
   @IsOptional()
   @IsString()
   isp?: string;
-
-  @IsNumber()
-  @Min(1)
-  @Max(1000)
-  ports: number;
 }
 
 export class ModifyProxyResidentDto {

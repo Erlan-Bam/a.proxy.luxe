@@ -172,11 +172,6 @@ export class OrderService {
         400,
       );
     }
-    console.log(
-      reference.tariffs?.find(
-        (tariff) => order.tariff && tariff.name.endsWith(order.tariff),
-      )?.id,
-    );
     const orderInfo: OrderInfo = {
       type: order.type,
       orderId: order.id,

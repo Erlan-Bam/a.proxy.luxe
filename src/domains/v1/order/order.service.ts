@@ -172,6 +172,11 @@ export class OrderService {
         400,
       );
     }
+    console.log(
+      reference.tariffs?.find(
+        (tariff) => order.tariff && tariff.name.endsWith(order.tariff),
+      )?.id,
+    );
     const orderInfo: OrderInfo = {
       type: order.type,
       orderId: order.id,
@@ -179,6 +184,11 @@ export class OrderService {
       tariff: order.tariff ? order.tariff : undefined,
       countryId: reference.country?.find(
         (country) => order.country && country.name.endsWith(order.country),
+      )?.id,
+      tariffId: reference.tariffs?.find(
+        (tariff) =>
+          order.tariff &&
+          tariff.name.toLowerCase() === order.tariff.toLowerCase(),
       )?.id,
       customTargetName: order.goal,
       periodId: order.periodDays ? order.periodDays : undefined,

@@ -12,6 +12,7 @@ export interface OrderInfo {
   quantity?: number;
   authorization?: string;
   targetId?: number;
+  tariffId?: number;
   targetSectionId?: number;
   customTargetName?: null | string;
 }

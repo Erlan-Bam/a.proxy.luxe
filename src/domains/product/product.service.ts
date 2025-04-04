@@ -377,6 +377,12 @@ export class ProductService {
       export: {
         ports: data.ports,
       },
+      geo: {
+        country: data.geo.country,
+        region: data.geo.region,
+        city: data.geo.city,
+        isp: data.geo.isp,
+      },
       package_key: data.package_key,
     });
 

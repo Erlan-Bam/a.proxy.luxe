@@ -1,17 +1,15 @@
+import { Type } from 'class-transformer';
 import {
   IsString,
-  IsIn,
   IsOptional,
   IsNumber,
   Min,
   Max,
-  ValidateNested,
   IsInt,
-  IsIP,
+  ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
-class ExportFilterDto {
+class GeoDTO {
   @IsOptional()
   @IsString()
   country?: string;
@@ -53,4 +51,9 @@ export class ModifyProxyResidentDto {
 
   @IsString()
   package_key: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GeoDTO)
+  geo: GeoDTO;
 }

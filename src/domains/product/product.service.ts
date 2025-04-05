@@ -34,6 +34,35 @@ export class ProductService {
     });
   }
 
+  async addAuth(orderId: string | number, authOrIp: string) {
+    try {
+      const response = await this.proxySeller.get(
+        `/proxy/list?orderId=${orderId}`,
+      );
+
+      console.log(response.data.data.items[0]);
+
+      const parts = authOrIp.split(':');
+      if (parts.length === 2) {
+        await this.proxySeller.post('/auth/add', {
+          orderNumber: response.data.data.items[0].order_number,
+          generateAuth: authOrIp,
+        });
+      } else if (parts.length === 4) {
+        await this.proxySeller.post('/auth/add/ip', {
+          orderNumber: response.data.data.items[0].order_number,
+          ip: authOrIp,
+        });
+      } else {
+        throw new Error('Invalid format');
+      }
+
+      return { status: response.data.status };
+    } catch (error) {
+      throw new HttpException('Something went wrong...', 500);
+    }
+  }
+
   async getProductReference(): Promise<
     ResponseReferenceDTO | ResponseErrorDTO
   > {

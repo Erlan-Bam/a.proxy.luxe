@@ -16,6 +16,7 @@ import { RemoveBalanceDTO } from './dto/remove-balance.dto';
 import { BanUserDTO } from './dto/ban-user.dto';
 import { AddPromocodeDTO } from './dto/add-promo.dto';
 import { SupportMessageDto } from './dto/send-support.dto';
+import { AddAuthDto } from './dto/add-auth.dto';
 
 @Controller('v1/user')
 export class UserController {
@@ -36,9 +37,10 @@ export class UserController {
     };
   }
 
-  @Get('send-emails')
-  async sendEmails() {
-    await this.userService.notifyExpiringProxies();
+  @Post('add-auth')
+  @UseGuards(AuthGuard('jwt'))
+  async addAuth(@Body() body: AddAuthDto) {
+    return await this.userService.addAuthorization(body);
   }
 
   @Post('send-verification')

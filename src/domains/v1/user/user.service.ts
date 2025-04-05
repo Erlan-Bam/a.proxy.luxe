@@ -9,11 +9,15 @@ import { BanUserDTO } from './dto/ban-user.dto';
 import { AddPromocodeDTO } from './dto/add-promo.dto';
 import { SupportMessageDto } from './dto/send-support.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { addDays, isWithinInterval } from 'date-fns';
+import { AddAuthDto } from './dto/add-auth.dto';
+import { ProductService } from 'src/domains/product/product.service';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private productService: ProductService,
+  ) {}
 
   async generateVerificationCode(): Promise<string> {
     const characters = '0123456789';
@@ -697,6 +701,9 @@ export class UserService {
 
     await transporter.sendMail(mailOptions);
     return { success: true };
+  }
+  async addAuthorization(data: AddAuthDto) {
+    await this.productService.addAuth(data.orderId, data.auth);
   }
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async notifyExpiringProxies() {

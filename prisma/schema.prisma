@@ -43,6 +43,7 @@ model User {
   balance               Decimal  @default(0)
   isVerified            Boolean  @default(false)
   ip                    String   @default("0.0.0.0")
+  lang                  String   @default("ru")
   isBanned              Boolean  @default(false)
   verification_code     String?
   change_password_code  String?

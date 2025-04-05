@@ -59,6 +59,7 @@ export class AuthService {
         ...userDetails,
         password: hashedPassword,
         ip: ip,
+        lang: lang,
       },
     });
 

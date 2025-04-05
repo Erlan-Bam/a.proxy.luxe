@@ -8,6 +8,8 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { BanUserDTO } from './dto/ban-user.dto';
 import { AddPromocodeDTO } from './dto/add-promo.dto';
 import { SupportMessageDto } from './dto/send-support.dto';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { addDays, isWithinInterval } from 'date-fns';
 
 @Injectable()
 export class UserService {
@@ -695,5 +697,122 @@ export class UserService {
 
     await transporter.sendMail(mailOptions);
     return { success: true };
+  }
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async notifyExpiringProxies() {
+    const today = new Date();
+
+    // Все заказы, у которых дата покупки была 27 или 28 дней назад
+    const twentySevenDaysAgo = new Date();
+    twentySevenDaysAgo.setDate(today.getDate() - 27);
+
+    const twentyEightDaysAgo = new Date();
+    twentyEightDaysAgo.setDate(today.getDate() - 28);
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        updatedAt: {
+          in: [twentySevenDaysAgo, twentyEightDaysAgo],
+        },
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    for (const order of orders) {
+      const user = order.user;
+      const lang = user.lang || 'en';
+      const email = user.email;
+
+      const expirationDate = new Date(order.updatedAt);
+      expirationDate.setMonth(expirationDate.getMonth() + 1);
+
+      const expiration = expirationDate.toLocaleDateString(
+        lang === 'ru' ? 'ru-RU' : 'en-GB',
+      );
+
+      const subject =
+        lang === 'ru'
+          ? 'Ваш прокси скоро истекает'
+          : 'Your proxy is about to expire';
+
+      const html = `
+      <!DOCTYPE html>
+      <html lang="${lang}">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Proxy Expiration Notice</title>
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, sans-serif;">
+          <table align="center" width="100%" style="padding: 20px; background-color: #f5f5f5;">
+            <tr>
+              <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #000000; border-radius: 10px; overflow: hidden; color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                  <!-- Header -->
+                  <tr>
+                    <td align="center" style="padding: 25px 0; border-bottom: 2px solid #f3d675;">
+                      <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" alt="Logo" width="36" height="36" style="vertical-align: middle; margin-right: 10px;" />
+                      <span style="font-size: 24px; font-weight: bold; color: #f3d675;">PROXY.LUXE</span>
+                    </td>
+                  </tr>
+
+                  <!-- Body -->
+                  <tr>
+                    <td style="padding: 30px;">
+                      <h2 style="color: #f3d675; text-align: center; margin-top: 0;">
+                        ${lang === 'ru' ? 'Ваш прокси истекает' : 'Your proxy is expiring'}
+                      </h2>
+                      <p style="font-size: 16px; line-height: 1.6; text-align: center;">
+                        ${
+                          lang === 'ru'
+                            ? `Срок действия вашего прокси заканчивается <strong>${expiration}</strong>.<br/>Пожалуйста, продлите его, чтобы избежать отключения.`
+                            : `Your proxy will expire on <strong>${expiration}</strong>.<br/>Please renew it to avoid disconnection.`
+                        }
+                      </p>
+                      <p style="text-align: center; font-size: 14px; color: #aaaaaa;">
+                        ${
+                          lang === 'ru'
+                            ? 'Если у вас возникли вопросы, пожалуйста, свяжитесь с нами:'
+                            : 'If you have any questions, feel free to contact us:'
+                        }
+                        <br />
+                        <a href="mailto:admin@proxy.luxe" style="color: #f3d675;">admin@proxy.luxe</a>
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Footer -->
+                  <tr>
+                    <td align="center" style="padding: 15px; background-color: rgba(243, 214, 117, 0.05); border-top: 1px solid rgba(243, 214, 117, 0.3); font-size: 12px; color: #999;">
+                      © 2025 PROXY.LUXE
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+
+      const transporter = nodemailer.createTransport({
+        host: 'smtp.timeweb.ru',
+        port: 465,
+        secure: true,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject,
+        html,
+      });
+    }
   }
 }

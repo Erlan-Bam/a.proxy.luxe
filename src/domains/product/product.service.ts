@@ -289,11 +289,8 @@ export class ProductService {
       } else {
         const result: any[] = [];
 
-        const trafficResponse = await this.proxySeller.get(
-          `/residentsubuser/packages`,
-        );
-
-        const packages = trafficResponse.data.data ?? [];
+        const traffic = await this.proxySeller.get(`/residentsubuser/packages`);
+        const packages = traffic.data.data || [];
 
         for (const proxySellerId of proxySellerIds) {
           const response = await this.proxySeller.get(
@@ -303,11 +300,11 @@ export class ProductService {
             continue;
           }
 
-          const proxies = response.data.data;
-
-          const matchedPackage = packages.find(
-            (pkg) => pkg.package_key === proxySellerId,
+          const foundPackage = packages.find(
+            (p) => p.package_key === proxySellerId,
           );
+
+          const proxies = response.data.data;
 
           for (const proxy of proxies) {
             const ports: number[] = [];
@@ -316,10 +313,8 @@ export class ProductService {
             }
 
             result.push({
-              login: proxy.login,
-              password: proxy.password,
-              ports: ports,
-              package_info: matchedPackage ?? null,
+              package_info: foundPackage,
+              package_list: response.data.data ?? null,
             });
           }
         }

@@ -361,6 +361,7 @@ export class ProductService {
         return response.data.data.package_key;
       }
     } catch (error) {
+      console.log(error);
       throw new HttpException('Failed to place an order', 500);
     }
   }

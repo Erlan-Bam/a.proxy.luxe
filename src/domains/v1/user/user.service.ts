@@ -700,25 +700,50 @@ export class UserService {
   }
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async notifyExpiringProxies() {
-    const today = new Date();
+    const now = new Date();
+    console.log('worked');
 
-    // Все заказы, у которых дата покупки была 27 или 28 дней назад
-    const twentySevenDaysAgo = new Date();
-    twentySevenDaysAgo.setDate(today.getDate() - 27);
+    const from = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() - 28,
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
 
-    const twentyEightDaysAgo = new Date();
-    twentyEightDaysAgo.setDate(today.getDate() - 28);
+    const to = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() - 27,
+        23,
+        59,
+        59,
+        999,
+      ),
+    );
+
+    console.log(
+      `🔍 Looking for orders from ${from.toISOString()} to ${to.toISOString()}`,
+    );
 
     const orders = await this.prisma.order.findMany({
       where: {
+        status: 'PAID',
         updatedAt: {
-          in: [twentySevenDaysAgo, twentyEightDaysAgo],
+          gte: from,
+          lte: to,
         },
       },
       include: {
         user: true,
       },
     });
+    console.log(orders);
 
     for (const order of orders) {
       const user = order.user;

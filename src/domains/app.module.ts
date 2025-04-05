@@ -8,9 +8,11 @@ import { ArticleModule } from './v1/articles/article/article.module';
 import { ServicesModule } from './v1/services/services.module';
 import { PaymentModule } from './v1/payment/payment.module';
 import { SharedModule } from './v1/shared/shared.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',

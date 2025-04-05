@@ -36,6 +36,11 @@ export class UserController {
     };
   }
 
+  @Get('send-emails')
+  async sendEmails() {
+    await this.userService.notifyExpiringProxies();
+  }
+
   @Post('send-verification')
   @UseGuards(AuthGuard('jwt'))
   async sendVerificationEmail(@Request() request) {

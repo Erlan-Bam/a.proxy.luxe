@@ -328,25 +328,18 @@ export class ProductService {
           if (response.data.status !== 'success') {
             continue;
           }
+          console.log(proxySellerId, response.data);
 
           const foundPackage = packages.find(
             (p) => p.package_key === proxySellerId,
           );
 
-          const proxies = response.data.data;
-
-          for (const proxy of proxies) {
-            const ports: number[] = [];
-            for (let i = 0; i < proxy.export.ports; i++) {
-              ports.push(10000 + i);
-            }
-
-            result.push({
-              package_info: foundPackage,
-              package_list: response.data.data ?? null,
-            });
-          }
+          result.push({
+            package_info: foundPackage,
+            package_list: response.data.data ?? null,
+          });
         }
+        console.log(result);
 
         return {
           status: 'success',

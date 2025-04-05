@@ -328,7 +328,6 @@ export class ProductService {
           if (response.data.status !== 'success') {
             continue;
           }
-          console.log(proxySellerId, response.data);
 
           const foundPackage = packages.find(
             (p) => p.package_key === proxySellerId,
@@ -339,7 +338,6 @@ export class ProductService {
             package_list: response.data.data ?? null,
           });
         }
-        console.log(result);
 
         return {
           status: 'success',

@@ -300,6 +300,9 @@ export class ProductService {
                 country,
                 login,
                 password,
+                order_id,
+                order_number,
+                auth_ip,
               }) => ({
                 ip,
                 protocol,
@@ -308,6 +311,9 @@ export class ProductService {
                 country,
                 login,
                 password,
+                order_id,
+                order_number,
+                auth_ip,
               }),
             ) ?? [];
 

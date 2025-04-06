@@ -703,7 +703,7 @@ export class UserService {
     return { success: true };
   }
   async addAuthorization(data: AddAuthDto) {
-    await this.productService.addAuth(data.orderId, data.auth);
+    await this.productService.addAuth(data.orderNumber, data.ip);
   }
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async notifyExpiringProxies() {

@@ -36,7 +36,7 @@ export class ProductService {
 
   async addAuth(orderNumber: string | number, ip: string) {
     try {
-      const parts = ip.split(':');
+      const parts = ip.split('.');
       if (parts.length === 4) {
         await this.proxySeller.post('/auth/add/ip', {
           orderNumber: orderNumber,
@@ -276,6 +276,7 @@ export class ProductService {
             message: 'Invalid response from proxy provider',
           };
         }
+        console.log(response.data.data.items);
 
         const filteredItems =
           response.data.data.items

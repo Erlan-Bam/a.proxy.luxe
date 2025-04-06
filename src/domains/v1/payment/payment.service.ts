@@ -70,13 +70,19 @@ export class PaymentService {
     });
   }
 
-  async getPaymentHistory(userId: string): Promise<Payment[]> {
+  async getPaymentHistory(userId: string) {
     const payments = await this.prisma.payment.findMany({
       where: { userId: userId },
+      orderBy: { createdAt: 'desc' },
     });
-    if (!payments) {
+    const orders = await this.prisma.order.findMany({
+      where: { status: 'PAID' },
+      select: { createdAt: true, totalPrice: true, id: true, status: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!payments && !orders) {
       throw new HttpException('History not found', 404);
     }
-    return payments;
+    return { payments: payments, orders: orders };
   }
 }

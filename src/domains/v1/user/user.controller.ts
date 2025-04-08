@@ -7,6 +7,7 @@ import {
   Body,
   Delete,
   Param,
+  Patch,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UserService } from './user.service';
@@ -18,6 +19,7 @@ import { AddPromocodeDTO } from './dto/add-promo.dto';
 import { SupportMessageDto } from './dto/send-support.dto';
 import { AddAuthDto } from './dto/add-auth.dto';
 import { ProductService } from 'src/domains/product/product.service';
+import { UpdateListDto } from './dto/update-list.dto';
 
 @Controller('v1/user')
 export class UserController {
@@ -123,6 +125,17 @@ export class UserController {
     @Param('packageKey') packageKey: string,
   ) {
     return await this.productService.deleteList(listId, packageKey);
+  }
+
+  @Patch('update-list')
+  @UseGuards(AuthGuard('jwt'))
+  async updateList(@Body() body: UpdateListDto) {
+    return await this.productService.updateList(
+      body.listId,
+      body.packageKey,
+      body.title,
+      body.rotation,
+    );
   }
 
   @Post('send-support')

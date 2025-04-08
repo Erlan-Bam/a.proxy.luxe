@@ -419,6 +419,35 @@ export class ProductService {
     return { status: 'success' };
   }
 
+  async updateList(
+    listId: number,
+    packageKey: string,
+    title?: string | undefined,
+    rotation?: number | undefined,
+  ) {
+    if (title) {
+      await this.proxySeller.post('/residentsubuser/list/rename', {
+        data: {
+          id: listId,
+          package_key: packageKey,
+          title: title,
+        },
+      });
+    }
+
+    if (rotation) {
+      await this.proxySeller.post('/residentsubuser/list/rename', {
+        data: {
+          id: listId,
+          package_key: packageKey,
+          rotation: title,
+        },
+      });
+    }
+
+    return { status: 'success' };
+  }
+
   async convertToBytes(tariff: string): Promise<number> {
     const [valueStr, unitRaw] = tariff.trim().split(/\s+/);
     const value = parseFloat(valueStr);

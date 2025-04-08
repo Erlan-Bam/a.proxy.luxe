@@ -77,7 +77,13 @@ export class PaymentService {
     });
     const orders = await this.prisma.order.findMany({
       where: { status: 'PAID' },
-      select: { createdAt: true, totalPrice: true, id: true, status: true },
+      select: {
+        createdAt: true,
+        totalPrice: true,
+        id: true,
+        status: true,
+        proxySellerId: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
     if (!payments && !orders) {

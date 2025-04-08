@@ -8,18 +8,17 @@ import {
   ParseFloatPipe,
   Get,
   UseGuards,
-  HttpStatus,
   HttpCode,
   Param,
+  HttpException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PaymentService } from './payment.service';
 import * as crypto from 'crypto';
 import { AuthGuard } from '@nestjs/passport';
 import { CreateInvoicePayeer } from './dto/create-invoice-payeer.dto';
-import { DigisellerPaymentDto } from './dto/digiseller-payment-init.dto';
 import axios from 'axios';
-import { timestamp } from 'rxjs';
+import { UserType } from '@prisma/client';
 
 @Controller('v1/payment')
 export class PaymentController {
@@ -177,5 +176,17 @@ export class PaymentController {
     return res.redirect(
       `https://proxy.luxe/${lang.startsWith('ru') ? 'ru' : 'en'}/personal-account`,
     );
+  }
+
+  @Get('admin/get-history/:userId')
+  @UseGuards(AuthGuard('jwt'))
+  async getAdminPaymentHistory(
+    @Param('userId') userId: string,
+    @Request() req,
+  ) {
+    if (req.user.type !== UserType.ADMIN) {
+      throw new HttpException('Admins only: access denied.', 403);
+    }
+    return await this.paymentService.getPaymentHistory(userId);
   }
 }

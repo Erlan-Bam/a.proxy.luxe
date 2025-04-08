@@ -426,23 +426,25 @@ export class ProductService {
     rotation?: number | undefined,
   ) {
     if (title) {
-      await this.proxySeller.post('/residentsubuser/list/rename', {
-        data: {
+      const response = await this.proxySeller.post(
+        '/residentsubuser/list/rename',
+        {
           id: listId,
           package_key: packageKey,
           title: title,
         },
-      });
+      );
     }
 
     if (rotation) {
-      await this.proxySeller.post('/residentsubuser/list/rename', {
-        data: {
+      const response = await this.proxySeller.post(
+        '/residentsubuser/list/rotation',
+        {
           id: listId,
           package_key: packageKey,
-          rotation: title,
+          rotation: rotation,
         },
-      });
+      );
     }
 
     return { status: 'success' };

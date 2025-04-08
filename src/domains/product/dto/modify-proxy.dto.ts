@@ -33,7 +33,7 @@ export class ModifyProxyResidentDto {
 
   @IsInt()
   @Min(-1)
-  @Max(1)
+  @Max(3600)
   rotation: number;
 
   @IsInt()

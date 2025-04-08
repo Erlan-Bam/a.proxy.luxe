@@ -16,6 +16,6 @@ export class UpdateListDto {
   @IsOptional()
   @IsInt()
   @Min(-1)
-  @Max(1)
+  @Max(3600)
   rotation: number;
 }

@@ -90,6 +90,7 @@ model Payment {
   userId          String
   user            User          @relation(fields: [userId], references: [id])
   price           Decimal
+  method          String
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 }

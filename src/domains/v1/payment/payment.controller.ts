@@ -99,7 +99,7 @@ export class PaymentController {
     if (!userId || !amount) {
       return res.status(400).send({ message: 'Invalid payment data' });
     }
-    await this.paymentService.successfulPayment(userId, amount);
+    await this.paymentService.successfulPayment(userId, amount, 'WEBMONEY');
 
     return res
       .status(200)
@@ -121,6 +121,7 @@ export class PaymentController {
     await this.paymentService.successfulPayment(
       request.body.m_orderid,
       Number(request.body.m_amount),
+      'PAYEER',
     );
   }
 
@@ -172,7 +173,7 @@ export class PaymentController {
       amount = payment.data.amount_usd;
       lang = payment.data.lang;
     }
-    await this.paymentService.successfulPayment(userId, amount);
+    await this.paymentService.successfulPayment(userId, amount, 'DIGISELLER');
     return res.redirect(
       `https://proxy.luxe/${lang.startsWith('ru') ? 'ru' : 'en'}/personal-account`,
     );

@@ -59,14 +59,14 @@ export class PaymentService {
     }
   }
 
-  async successfulPayment(userId: string, amount: number) {
+  async successfulPayment(userId: string, amount: number, method: string) {
     await this.prisma.user.update({
       where: { id: userId },
       data: { balance: { increment: amount } },
     });
 
     return await this.prisma.payment.create({
-      data: { userId: userId, price: amount },
+      data: { userId: userId, price: amount, method: method },
     });
   }
 

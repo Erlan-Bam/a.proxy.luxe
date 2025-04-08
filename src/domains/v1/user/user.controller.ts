@@ -17,10 +17,14 @@ import { BanUserDTO } from './dto/ban-user.dto';
 import { AddPromocodeDTO } from './dto/add-promo.dto';
 import { SupportMessageDto } from './dto/send-support.dto';
 import { AddAuthDto } from './dto/add-auth.dto';
+import { ProductService } from 'src/domains/product/product.service';
 
 @Controller('v1/user')
 export class UserController {
-  constructor(private userService: UserService) {}
+  constructor(
+    private userService: UserService,
+    private productService: ProductService,
+  ) {}
 
   @Get('me')
   @UseGuards(AuthGuard('jwt'))
@@ -86,6 +90,13 @@ export class UserController {
     return this.userService.banUser(data);
   }
 
+  @Post('unban')
+  @UseGuards(AuthGuard('jwt'))
+  async unbanUser(@Body() data: BanUserDTO, @Request() req) {
+    data.user = req.user;
+    return this.userService.unbanUser(data);
+  }
+
   @Post('promocode')
   @UseGuards(AuthGuard('jwt'))
   async addPromocode(@Body() data: AddPromocodeDTO, @Request() req) {
@@ -103,6 +114,15 @@ export class UserController {
   @UseGuards(AuthGuard('jwt'))
   async deletePromocode(@Request() req, @Param('code') code: string) {
     return this.userService.deletePromocode(req.user, code);
+  }
+
+  @Delete('delete-list/:listId/:packageKey')
+  @UseGuards(AuthGuard('jwt'))
+  async deleteList(
+    @Param('listId') listId: number,
+    @Param('packageKey') packageKey: string,
+  ) {
+    return await this.productService.deleteList(listId, packageKey);
   }
 
   @Post('send-support')

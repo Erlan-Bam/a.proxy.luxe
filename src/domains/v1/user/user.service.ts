@@ -374,6 +374,19 @@ export class UserService {
     });
   }
 
+  async unbanUser(data: BanUserDTO) {
+    let { user, email } = data;
+
+    if (user.type !== UserType.ADMIN) {
+      throw new HttpException('Only admins can add balance', 403);
+    }
+
+    return await this.prisma.user.update({
+      where: { email: email },
+      data: { isBanned: false },
+    });
+  }
+
   async addPromocode(data: AddPromocodeDTO) {
     let { user, promocode, discount, limit } = data;
 

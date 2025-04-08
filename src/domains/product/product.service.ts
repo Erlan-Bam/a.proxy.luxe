@@ -401,6 +401,24 @@ export class ProductService {
     };
   }
 
+  async deleteList(listId: number, packageKey: string) {
+    const response = await this.proxySeller.delete(
+      '/residentsubuser/list/delete',
+      {
+        data: {
+          id: listId,
+          package_key: packageKey,
+        },
+      },
+    );
+
+    if (response.data.status !== 'success') {
+      return { status: 'error', error: response.data.error };
+    }
+
+    return { status: 'success' };
+  }
+
   async convertToBytes(tariff: string): Promise<number> {
     const [valueStr, unitRaw] = tariff.trim().split(/\s+/);
     const value = parseFloat(valueStr);

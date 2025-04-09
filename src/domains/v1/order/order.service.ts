@@ -183,7 +183,8 @@ export class OrderService {
       tariffId: reference.tariffs?.find(
         (tariff) =>
           order.tariff &&
-          tariff.name.toLowerCase() === order.tariff.toLowerCase(),
+          tariff.name.toLowerCase() === order.tariff.toLowerCase() &&
+          tariff.personal,
       )?.id,
       customTargetName: order.goal,
       periodId: order.periodDays ? order.periodDays : undefined,

@@ -354,10 +354,12 @@ export class ProductService {
         const response = await this.proxySeller.post('/order/make', orderInfo);
         return response.data.data.orderId.toString();
       } else {
-        await this.proxySeller.post('/order/make', {
+        console.log(orderInfo.tariffId);
+        const res = await this.proxySeller.post('/order/make', {
           tarifId: orderInfo.tariffId,
           paymentId: 1,
         });
+        console.log('order res', res.data);
         const tariff = await this.convertToBytes(orderInfo.tariff as string);
         const response = await this.proxySeller.post(
           '/residentsubuser/create',
@@ -368,6 +370,7 @@ export class ProductService {
             expired_at: this.getOneMonthLaterFormatted(),
           },
         );
+        console.log('create pkg res', response.data);
         return response.data.data.package_key;
       }
     } catch (error) {

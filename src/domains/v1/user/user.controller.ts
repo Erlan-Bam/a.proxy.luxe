@@ -43,6 +43,12 @@ export class UserController {
     };
   }
 
+  @Get('coupon/check-valid/:promocode')
+  @UseGuards(AuthGuard('jwt'))
+  async checkValidCoupon(@Param('promocode') promocode: string) {
+    return await this.userService.checkValidCoupon(promocode);
+  }
+
   @Post('add-auth')
   @UseGuards(AuthGuard('jwt'))
   async addAuth(@Body() body: AddAuthDto) {

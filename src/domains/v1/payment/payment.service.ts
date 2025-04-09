@@ -76,7 +76,7 @@ export class PaymentService {
       orderBy: { createdAt: 'desc' },
     });
     const orders = await this.prisma.order.findMany({
-      where: { status: 'PAID' },
+      where: { status: 'PAID', userId: userId },
       select: {
         createdAt: true,
         totalPrice: true,

@@ -1,86 +1,73 @@
 import { Injectable } from '@nestjs/common';
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import * as tunnel from 'tunnel';
-import * as base64 from 'base-64';
 
 @Injectable()
 export class ProxyCheckerService {
-  // Добавляем и https, и http fallback URL'ы
+  // Fallback URLs. These endpoints return only the IP as a string.
   private fallbackUrls = [
-    // 'https://api.ipify.org',
     'http://api.ipify.org',
-    // 'https://icanhazip.com',
     'http://icanhazip.com',
-    // 'https://ifconfig.me/ip',
     'http://ifconfig.me/ip',
   ];
 
   async checkProxies(proxies: string[], addCountry: boolean): Promise<any[]> {
+    // Retrieve our own public IP (without using a proxy)
+    const myIp = (await this.getMyIpAddressDirect()).trim();
+
     return Promise.all(
       proxies.map(async (raw) => {
         let [ip, port, login, password] = ['', '', '', ''];
         let proxyType = 'HTTP(s)';
 
         try {
-          // Если прокси начинается с socks, используем SocksProxyAgent
+          const agentCandidates: any[] = [];
+
+          // For SOCKS proxies:
           if (raw.startsWith('socks5://') || raw.startsWith('socks4://')) {
             const agent = new SocksProxyAgent(raw);
             proxyType = raw.startsWith('socks5://') ? 'SOCKS5' : 'SOCKS4';
             const ipMatch = raw.match(/(\d+\.\d+\.\d+\.\d+)/);
             if (ipMatch) ip = ipMatch[1];
             port = raw.match(/:(\d+)/)?.[1] || '';
-            const start = Date.now();
-            const ipResponse = await this.tryFallbackRequest(agent, {
-              'User-Agent': 'Mozilla/5.0',
-            });
-            const end = Date.now();
-            return {
-              status: 'valid',
-              ip,
-              port,
-              login: null,
-              password: null,
-              proxyIP: ipResponse?.trim(),
-              type: proxyType,
-              responseTime: ((end - start) / 1000).toFixed(3),
-              country: addCountry ? await this.getCountry(ip) : undefined,
-            };
-          }
-
-          // HTTP/HTTPS прокси
-          const parts = raw.split(':');
-          let agents: any[] = [];
-          if (parts.length === 4) {
-            [ip, port, login, password] = parts;
-            // Первый вариант — HttpsProxyAgent с URL, где в строке уже содержатся креды
-            const proxyUrl = `http://${login}:${password}@${ip}:${port}`;
-            agents.push(new HttpsProxyAgent(proxyUrl));
-            // Второй вариант — tunnel.httpsOverHttp (без передачи заголовка вручную)
-            agents.push(
-              tunnel.httpsOverHttp({
-                proxy: {
-                  host: ip,
-                  port: parseInt(port),
-                  proxyAuth: `${login}:${password}`,
-                },
-              }),
-            );
-          } else if (parts.length === 2) {
-            [ip, port] = parts;
-            const proxyUrl = `http://${ip}:${port}`;
-            agents.push(new HttpsProxyAgent(proxyUrl));
-            agents.push(
-              tunnel.httpsOverHttp({
-                proxy: {
-                  host: ip,
-                  port: parseInt(port),
-                },
-              }),
-            );
+            agentCandidates.push(agent);
           } else {
-            throw new Error('Invalid proxy format');
+            // For HTTP/HTTPS proxies (colon-separated formats).
+            const parts = raw.split(':');
+            if (parts.length === 4) {
+              // Format: ip:port:login:password
+              [ip, port, login, password] = parts;
+              // Option 1: HttpsProxyAgent with credentials embedded in URL.
+              const proxyUrl = `http://${login}:${password}@${ip}:${port}`;
+              agentCandidates.push(new HttpsProxyAgent(proxyUrl));
+              // Option 2: tunnel.httpsOverHttp with credentials provided via proxyAuth.
+              agentCandidates.push(
+                tunnel.httpsOverHttp({
+                  proxy: {
+                    host: ip,
+                    port: parseInt(port, 10),
+                    proxyAuth: `${login}:${password}`,
+                  },
+                }),
+              );
+            } else if (parts.length === 2) {
+              // Format: ip:port
+              [ip, port] = parts;
+              const proxyUrl = `http://${ip}:${port}`;
+              agentCandidates.push(new HttpsProxyAgent(proxyUrl));
+              agentCandidates.push(
+                tunnel.httpsOverHttp({
+                  proxy: {
+                    host: ip,
+                    port: parseInt(port, 10),
+                  },
+                }),
+              );
+            } else {
+              throw new Error('Invalid proxy format');
+            }
           }
 
           const headers = {
@@ -88,18 +75,24 @@ export class ProxyCheckerService {
           };
 
           const start = Date.now();
-          let ipResponse: string | null = null;
-          for (const agent of agents) {
-            try {
-              ipResponse = await this.tryFallbackRequest(agent, headers);
-              if (ipResponse) break;
-            } catch (err) {
-              continue;
-            }
-          }
+          // Attempt all candidate agents concurrently.
+          const ipResponse = await Promise.any(
+            agentCandidates.map((agent) =>
+              this.tryFallbackRequest(agent, headers),
+            ),
+          );
+
           if (!ipResponse) {
             throw new Error('All fallback test URLs failed');
           }
+
+          // Compare the returned IP with our own IP.
+          // If credentials were provided and the ipResponse equals our direct IP,
+          // then the proxy did not authenticate properly.
+          if (login && password && ipResponse.trim() === myIp) {
+            throw new Error('Proxy Authentication Failed (407)');
+          }
+
           const end = Date.now();
           return {
             status: 'valid',
@@ -107,12 +100,12 @@ export class ProxyCheckerService {
             port,
             login: login || null,
             password: password || null,
-            proxyIP: ipResponse?.trim(),
+            proxyIP: ipResponse.trim(),
             type: proxyType,
             responseTime: ((end - start) / 1000).toFixed(3),
             country: addCountry ? await this.getCountry(ip) : undefined,
           };
-        } catch (error) {
+        } catch (error: any) {
           return {
             status: 'invalid',
             raw,
@@ -126,28 +119,57 @@ export class ProxyCheckerService {
     );
   }
 
-  private async tryFallbackRequest(
-    agent: any,
-    headers: any,
-  ): Promise<string | null> {
-    for (const url of this.fallbackUrls) {
-      try {
-        const response = await axios.get(url, {
-          timeout: 5000,
-          httpsAgent: agent,
-          headers,
-        });
-        return response.data;
-      } catch (err) {
-        continue;
-      }
+  /**
+   * Try the fallback request using the given agent.
+   * All fallback URLs are requested concurrently.
+   */
+  private async tryFallbackRequest(agent: any, headers: any): Promise<string> {
+    const timeoutMs = 1000;
+    // Create an array of promises for the fallback URLs.
+    const fallbackPromises = this.fallbackUrls.map((url) => {
+      const config: AxiosRequestConfig = {
+        url,
+        method: 'GET',
+        timeout: timeoutMs,
+        headers,
+        httpsAgent: agent,
+        httpAgent: agent,
+        transformResponse: (data) => data,
+      };
+      return axios(config).then((response) => response.data);
+    });
+
+    // Promise.any resolves as soon as one promise succeeds.
+    try {
+      return await Promise.any(fallbackPromises);
+    } catch (error) {
+      throw new Error('All fallback test URLs failed');
     }
-    throw new Error('All fallback test URLs failed');
   }
 
+  /**
+   * Retrieve our own public IP (without using any proxy).
+   */
+  private async getMyIpAddressDirect(): Promise<string> {
+    try {
+      const response = await axios.get('http://api.ipify.org', {
+        timeout: 1000,
+        transformResponse: (data) => data,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to retrieve own IP address');
+    }
+  }
+
+  /**
+   * Optionally, get the country code for a given IP.
+   */
   private async getCountry(ip: string): Promise<string | null> {
     try {
-      const res = await axios.get(`http://ip-api.com/json/${ip}`);
+      const res = await axios.get(`http://ip-api.com/json/${ip}`, {
+        timeout: 1000,
+      });
       return res.data.countryCode || null;
     } catch {
       return null;

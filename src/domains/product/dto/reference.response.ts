@@ -29,6 +29,7 @@ export interface Target {
 export interface Tariff {
   id: number;
   name: string;
+  personal: boolean;
 }
 
 export interface ReferenceData {

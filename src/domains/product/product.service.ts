@@ -20,6 +20,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { ModifyProxyResidentDto } from './dto/modify-proxy.dto';
 import { title } from 'process';
+import { ProlongDto } from './dto/prolog.dto';
+import { userInfo } from 'os';
+import { UserService } from '../v1/user/user.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class ProductService {
@@ -258,11 +262,11 @@ export class ProductService {
     try {
       const orders = await this.prisma.order.findMany({
         where: { userId, proxySellerId: { not: null } },
-        select: { proxySellerId: true },
+        select: { proxySellerId: true, id: true, end_date: true },
       });
 
-      const proxySellerIds = new Set(
-        orders.map((order) => order.proxySellerId),
+      const proxySellerMap = new Map(
+        orders.map((order) => [order.proxySellerId, order.id]),
       );
 
       if (type !== 'resident') {
@@ -276,12 +280,14 @@ export class ProductService {
             message: 'Invalid response from proxy provider',
           };
         }
+        console.log(response.data.data.items);
 
         const filteredItems =
           response.data.data.items
-            ?.filter((item) => proxySellerIds.has(item.order_id))
+            ?.filter((item) => proxySellerMap.has(item.order_id))
             ?.map(
               ({
+                id,
                 ip,
                 protocol,
                 port_socks,
@@ -292,7 +298,10 @@ export class ProductService {
                 order_id,
                 order_number,
                 auth_ip,
+                can_prolong,
+                date_end,
               }) => ({
+                id,
                 ip,
                 protocol,
                 port_socks,
@@ -303,6 +312,9 @@ export class ProductService {
                 order_id,
                 order_number,
                 auth_ip,
+                can_prolong,
+                orderId: proxySellerMap.get(order_id),
+                date_end,
               }),
             ) ?? [];
 
@@ -316,6 +328,7 @@ export class ProductService {
         const traffic = await this.proxySeller.get(`/residentsubuser/packages`);
         const packages = traffic.data.data || [];
 
+        const proxySellerIds = orders.map((order) => order.proxySellerId);
         for (const proxySellerId of proxySellerIds) {
           const response = await this.proxySeller.get(
             `/residentsubuser/lists?package_key=${proxySellerId}`,
@@ -331,6 +344,7 @@ export class ProductService {
           result.push({
             package_info: foundPackage,
             package_list: response.data.data ?? null,
+            orderId: proxySellerMap.get(proxySellerId),
           });
         }
 
@@ -359,7 +373,6 @@ export class ProductService {
           tarifId: orderInfo.tariffId,
           paymentId: 1,
         });
-        console.log('order res', res.data);
         const tariff = await this.convertToBytes(orderInfo.tariff as string);
         const response = await this.proxySeller.post(
           '/residentsubuser/create',
@@ -370,13 +383,57 @@ export class ProductService {
             expired_at: this.getOneMonthLaterFormatted(),
           },
         );
-        console.log('create pkg res', response.data);
         return response.data.data.package_key;
       }
     } catch (error) {
       console.log(error);
       throw new HttpException('Failed to place an order', 500);
     }
+  }
+  async prolongProxy(data: ProlongDto) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: data.orderId },
+    });
+    if (!order) {
+      throw new HttpException('Order not found', 404);
+    }
+    const quantity =
+      order.type !== 'resident'
+        ? (order.quantity as number)
+        : parseInt(order.tariff as string);
+
+    const price = await this.getCalcForOrder(data.type, quantity);
+
+    if (new Decimal(data.user.balance).lt(price)) {
+      throw new HttpException('Insufficient balance', 400);
+    }
+
+    const response = await this.proxySeller.post(`/prolong/make/${data.type}`, {
+      ids: data.id,
+      periodId: data.periodId,
+      paymentId: '1',
+    });
+
+    if (response.data.status !== 'success') {
+      throw new HttpException('Invalid data', 400);
+    }
+
+    await this.prisma.user.update({
+      where: { id: order.userId },
+      data: {
+        balance: { decrement: price },
+      },
+    });
+    const proxies = await this.getActiveProxyList(data.user.id, data.type);
+    const proxy = proxies.data?.items.find(
+      (item) => item.orderId === data.orderId,
+    );
+    await this.prisma.order.update({
+      where: { id: data.orderId },
+      data: { end_date: proxy.date_end },
+    });
+
+    return { status: 'success' };
   }
   async modifyProxyResident(data: ModifyProxyResidentDto) {
     const response = await this.proxySeller.post('residentsubuser/list/add', {
@@ -404,6 +461,8 @@ export class ProductService {
     };
   }
 
+  async getActiveByOrderId(orderId: string) {}
+
   async deleteList(listId: number, packageKey: string) {
     const response = await this.proxySeller.delete(
       '/residentsubuser/list/delete',
@@ -429,25 +488,19 @@ export class ProductService {
     rotation?: number | undefined,
   ) {
     if (title) {
-      const response = await this.proxySeller.post(
-        '/residentsubuser/list/rename',
-        {
-          id: listId,
-          package_key: packageKey,
-          title: title,
-        },
-      );
+      await this.proxySeller.post('/residentsubuser/list/rename', {
+        id: listId,
+        package_key: packageKey,
+        title: title,
+      });
     }
 
     if (rotation) {
-      const response = await this.proxySeller.post(
-        '/residentsubuser/list/rotation',
-        {
-          id: listId,
-          package_key: packageKey,
-          rotation: rotation,
-        },
-      );
+      await this.proxySeller.post('/residentsubuser/list/rotation', {
+        id: listId,
+        package_key: packageKey,
+        rotation: rotation,
+      });
     }
 
     return { status: 'success' };

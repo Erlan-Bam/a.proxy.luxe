@@ -740,66 +740,44 @@ export class UserService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async notifyExpiringProxies() {
     const now = new Date();
-    console.log('worked');
 
-    const from = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate() - 28,
-        0,
-        0,
-        0,
-        0,
-      ),
-    );
+    const formatDate = (date: Date): string => {
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    };
 
-    const to = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate() - 27,
-        23,
-        59,
-        59,
-        999,
-      ),
-    );
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfterTomorrow = new Date(now);
+    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
 
-    console.log(
-      `🔍 Looking for orders from ${from.toISOString()} to ${to.toISOString()}`,
-    );
+    const notifyDates = [formatDate(tomorrow), formatDate(dayAfterTomorrow)];
 
     const orders = await this.prisma.order.findMany({
       where: {
         status: 'PAID',
-        updatedAt: {
-          gte: from,
-          lte: to,
+        end_date: {
+          in: notifyDates,
         },
       },
       include: {
         user: true,
       },
     });
-    console.log(orders);
 
     for (const order of orders) {
       const user = order.user;
       const lang = user.lang || 'en';
       const email = user.email;
-
-      const expirationDate = new Date(order.updatedAt);
-      expirationDate.setMonth(expirationDate.getMonth() + 1);
-
-      const expiration = expirationDate.toLocaleDateString(
-        lang === 'ru' ? 'ru-RU' : 'en-GB',
-      );
+      const expiration = order.end_date;
 
       const subject =
         lang === 'ru'
-          ? 'Ваш прокси скоро истекает'
-          : 'Your proxy is about to expire';
+          ? 'Срок действия вашего прокси скоро истекает'
+          : 'Your proxy is expiring soon';
 
       const html = `
       <!DOCTYPE html>
@@ -814,7 +792,6 @@ export class UserService {
             <tr>
               <td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #000000; border-radius: 10px; overflow: hidden; color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-                  <!-- Header -->
                   <tr>
                     <td align="center" style="padding: 25px 0; border-bottom: 2px solid #f3d675;">
                       <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" alt="Logo" width="36" height="36" style="vertical-align: middle; margin-right: 10px;" />
@@ -822,7 +799,6 @@ export class UserService {
                     </td>
                   </tr>
 
-                  <!-- Body -->
                   <tr>
                     <td style="padding: 30px;">
                       <h2 style="color: #f3d675; text-align: center; margin-top: 0;">
@@ -847,7 +823,6 @@ export class UserService {
                     </td>
                   </tr>
 
-                  <!-- Footer -->
                   <tr>
                     <td align="center" style="padding: 15px; background-color: rgba(243, 214, 117, 0.05); border-top: 1px solid rgba(243, 214, 117, 0.3); font-size: 12px; color: #999;">
                       © 2025 PROXY.LUXE

@@ -84,6 +84,9 @@ export class OrderService {
         goal: createOrderDto.goal,
         tariff: createOrderDto.tariff,
         totalPrice: totalPrice,
+        end_date: new Date(
+          new Date().setMonth(new Date().getMonth() + 1),
+        ).toLocaleDateString('ru-RU'),
       },
     });
   }

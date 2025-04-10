@@ -280,7 +280,7 @@ export class ProductService {
             message: 'Invalid response from proxy provider',
           };
         }
-        console.log(response.data.data.items);
+        console.log('type', response.data.data.items);
 
         const filteredItems =
           response.data.data.items
@@ -424,13 +424,10 @@ export class ProductService {
         balance: { decrement: price },
       },
     });
-    const proxies = await this.getActiveProxyList(data.user.id, data.type);
-    const proxy = proxies.data?.items.find(
-      (item) => item.orderId === data.orderId,
-    );
+
     await this.prisma.order.update({
       where: { id: data.orderId },
-      data: { end_date: proxy.date_end },
+      data: { end_date: await this.getNextMonthDate(order.end_date) },
     });
 
     return { status: 'success' };
@@ -460,8 +457,6 @@ export class ProductService {
       status: 'success',
     };
   }
-
-  async getActiveByOrderId(orderId: string) {}
 
   async deleteList(listId: number, packageKey: string) {
     const response = await this.proxySeller.delete(
@@ -533,5 +528,20 @@ export class ProductService {
     const year = oneMonthLater.getFullYear();
 
     return `${day}.${month}.${year}`;
+  }
+
+  async getNextMonthDate(dateStr: string): Promise<string> {
+    const [day, month, year] = dateStr.split('.').map(Number);
+    const date = new Date(year, month - 1, day);
+
+    // Добавляем месяц
+    date.setMonth(date.getMonth() + 1);
+
+    // Форматируем обратно в dd.mm.yyyy
+    return date.toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   }
 }

@@ -13,6 +13,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Language {
+  ru
+  en
+}
+
 enum ProxyType {
   HTTPS
   SOCKS5
@@ -63,6 +68,7 @@ model Article {
   id             String   @id @default(uuid())
   title          String
   content        String   @db.Text
+  lang           Language
   images         String[]
 }
 

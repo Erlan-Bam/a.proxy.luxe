@@ -21,6 +21,7 @@ import * as fs from 'fs';
 import { ModifyProxyResidentDto } from './dto/modify-proxy.dto';
 import { ProlongDto } from './dto/prolog.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { UpdateResident } from './dto/update-resident.dto';
 
 @Injectable()
 export class ProductService {
@@ -132,6 +133,19 @@ export class ProductService {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const geoData = JSON.parse(fileContent);
     return geoData;
+  }
+
+  async updateRotation(data: UpdateResident) {
+    try {
+      await this.proxySeller.post('/residentsubuser/update', {
+        rotation: data.rotation,
+        package_key: data.package_key,
+      });
+
+      return { status: 'success' };
+    } catch (err) {
+      throw new HttpException('Try later', 403);
+    }
   }
 
   async getProductReferenceByType(

@@ -19,7 +19,7 @@ export class UserService {
     private productService: ProductService,
   ) {}
 
-  async checkValidCoupon(promocode: string): Promise<boolean> {
+  async checkValidCoupon(promocode: string): Promise<Object> {
     const coupon = await this.prisma.coupon.findUnique({
       where: { code: promocode },
     });
@@ -28,7 +28,7 @@ export class UserService {
       throw new HttpException('Coupon not found', 400);
     }
 
-    return coupon.limit > 0;
+    return { isValid: coupon.limit > 0, coupon: coupon };
   }
 
   async generateVerificationCode(): Promise<string> {

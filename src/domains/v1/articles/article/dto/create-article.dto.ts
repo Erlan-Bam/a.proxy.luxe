@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray } from 'class-validator';
+import { Language } from '@prisma/client';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsArray,
+  IsEnum,
+} from 'class-validator';
 
 export class CreateArticleDto {
   @IsString()
@@ -8,6 +15,9 @@ export class CreateArticleDto {
   @IsString()
   @IsNotEmpty()
   content: string;
+
+  @IsEnum(Language)
+  lang: Language;
 
   @IsOptional()
   @IsArray()

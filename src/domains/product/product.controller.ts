@@ -8,6 +8,7 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  Patch,
 } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CalcRequestDTO, CalcResidentRequestDTO } from './dto/request.dto';
@@ -15,6 +16,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { UserType } from '@prisma/client';
 import { ModifyProxyResidentDto } from './dto/modify-proxy.dto';
 import { ProlongDto } from './dto/prolog.dto';
+import { UpdateResident } from './dto/update-resident.dto';
 
 @Controller('/v1/products')
 export class ProductController {
@@ -67,6 +69,13 @@ export class ProductController {
   @Post('/modify-proxy/resident')
   async modifyResidentProxy(@Body() body: ModifyProxyResidentDto) {
     return await this.productService.modifyProxyResident(body);
+  }
+
+  @Patch('update-rotation')
+  @UseGuards(AuthGuard('jwt'))
+  async updateRotation(@Body() body: UpdateResident, @Request() req) {
+    body.user = req.user;
+    return await this.productService.updateRotation(body);
   }
 
   @Post('prolong')

@@ -10,6 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  ParseEnumPipe,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -20,6 +21,7 @@ import { UpdateArticleDto } from './dto/update-article.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminGuard } from '../../auth/guards/admin.guard';
 import { baseUrl } from 'src/main';
+import { Language } from '@prisma/client';
 
 @Controller('v1/articles')
 export class ArticleController {
@@ -51,10 +53,14 @@ export class ArticleController {
   }
 
   @Get()
-  findAll(@Query('page') page = 1, @Query('limit') limit = 10) {
+  findAll(
+    @Query('lang', new ParseEnumPipe(Language)) lang: Language,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
     const pageNumber = parseInt(page as any, 10);
     const limitNumber = parseInt(limit as any, 10);
-    return this.articleService.findAll(pageNumber, limitNumber);
+    return this.articleService.findAll(pageNumber, limitNumber, lang);
   }
 
   @Get(':id')

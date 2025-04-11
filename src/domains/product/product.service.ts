@@ -19,10 +19,7 @@ import { PrismaService } from '../v1/shared/prisma.service';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ModifyProxyResidentDto } from './dto/modify-proxy.dto';
-import { title } from 'process';
 import { ProlongDto } from './dto/prolog.dto';
-import { userInfo } from 'os';
-import { UserService } from '../v1/user/user.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()

@@ -84,6 +84,8 @@ export class PaymentService {
         status: true,
         proxySellerId: true,
         goal: true,
+        type: true,
+        orderId: true,
       },
       orderBy: { createdAt: 'desc' },
     });

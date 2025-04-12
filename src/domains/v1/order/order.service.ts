@@ -94,15 +94,45 @@ export class OrderService {
   async findAll(userId: string, page: number, limit: number) {
     const skip = (page - 1) * limit;
 
-    const orders = await this.prisma.order.findMany({
-      where: { userId: userId, status: 'PENDING' },
-      skip: skip,
-      take: limit,
-    });
+    const [orders, total] = await this.prisma.$transaction([
+      this.prisma.order.findMany({
+        where: { userId: userId, status: 'PENDING' },
+        skip: skip,
+        take: limit,
+      }),
+      this.prisma.order.count({
+        where: { userId: userId, status: 'PENDING' },
+      }),
+    ]);
 
-    const total = await this.prisma.order.count({
-      where: { userId: userId, status: 'PENDING' },
-    });
+    return {
+      data: orders,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async generalLog(page = 1, limit = 50) {
+    const skip = (page - 1) * limit;
+    const [orders, total] = await this.prisma.$transaction([
+      this.prisma.order.findMany({
+        where: { status: 'PAID' },
+        include: {
+          user: {
+            select: {
+              email: true,
+            },
+          },
+        },
+        skip: skip,
+        take: limit,
+      }),
+      this.prisma.order.count({
+        where: { status: 'PAID' },
+      }),
+    ]);
 
     return {
       data: orders,
@@ -196,11 +226,17 @@ export class OrderService {
     };
 
     const placedOrder = await this.productService.placeOrder(orderInfo);
+    const package_key = placedOrder.package_key,
+      orderId = placedOrder.orderId;
 
     await this.prisma.$transaction([
       this.prisma.order.update({
         where: { id: order.id },
-        data: { proxySellerId: placedOrder, status: 'PAID' },
+        data: {
+          proxySellerId: package_key ? package_key : orderId,
+          status: 'PAID',
+          orderId: orderId,
+        },
       }),
 
       this.prisma.user.update({

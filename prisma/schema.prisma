@@ -87,6 +87,7 @@ model Order {
   totalPrice    Decimal
   promocode     String?
   proxySellerId String?       @unique
+  orderId       String?       @unique
   end_date      String
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

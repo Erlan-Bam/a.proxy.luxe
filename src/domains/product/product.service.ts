@@ -273,7 +273,7 @@ export class ProductService {
     try {
       const orders = await this.prisma.order.findMany({
         where: { userId, proxySellerId: { not: null } },
-        select: { proxySellerId: true, id: true, end_date: true },
+        select: { proxySellerId: true, id: true },
       });
 
       const proxySellerMap = new Map(
@@ -291,7 +291,6 @@ export class ProductService {
             message: 'Invalid response from proxy provider',
           };
         }
-        console.log('type', response.data.data.items);
 
         const filteredItems =
           response.data.data.items
@@ -377,10 +376,9 @@ export class ProductService {
     try {
       if (orderInfo.type !== 'resident') {
         const response = await this.proxySeller.post('/order/make', orderInfo);
-        return response.data.data.orderId.toString();
+        return { orderId: response.data.data.orderId.toString() };
       } else {
-        console.log(orderInfo.tariffId);
-        const res = await this.proxySeller.post('/order/make', {
+        const tariffResponse = await this.proxySeller.post('/order/make', {
           tarifId: orderInfo.tariffId,
           paymentId: 1,
         });
@@ -394,7 +392,10 @@ export class ProductService {
             expired_at: this.getOneMonthLaterFormatted(),
           },
         );
-        return response.data.data.package_key;
+        return {
+          package_key: response.data.data.package_key,
+          orderId: tariffResponse.data.data.orderId.toString(),
+        };
       }
     } catch (error) {
       console.log(error);

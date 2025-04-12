@@ -39,13 +39,7 @@ export class OrderController {
     return this.orderService.findAll(request.user.id, pageNumber, limitNumber);
   }
 
-  @Get(':id')
-  findById(@Param('id') id: string) {
-    return this.orderService.findById(id);
-  }
-
   @Post('finish')
-  @UseGuards(AuthGuard('jwt'))
   async finishOrder(@Body() finishDto: FinishOrderDto, @Request() request) {
     const lang =
       request.headers['accept-language']
@@ -55,8 +49,21 @@ export class OrderController {
     return this.orderService.finishOrder(finishDto, lang);
   }
 
+  @Get('admin/general-log')
+  async generalLog(
+    @Request() request,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+    if (request.user.type !== UserType.ADMIN) {
+      throw new ForbiddenException('Access denied: Admins only');
+    }
+    return this.orderService.generalLog(pageNumber, limitNumber);
+  }
+
   @Get('admin/:userId')
-  @UseGuards(AuthGuard('jwt'))
   findOrdersByUserId(@Param('userId') userId: string, @Request() request) {
     if (request.user.type !== UserType.ADMIN) {
       throw new ForbiddenException('Access denied: Admins only');
@@ -64,8 +71,12 @@ export class OrderController {
     return this.orderService.findOrdersByUserId(userId);
   }
 
+  @Get(':id')
+  findById(@Param('id') id: string) {
+    return this.orderService.findById(id);
+  }
+
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'))
   async deleteById(@Param('id') id: string, @Request() request) {
     return this.orderService.deleteById(request.user.id, id);
   }

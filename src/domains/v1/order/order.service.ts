@@ -257,7 +257,7 @@ export class OrderService {
       await this.prisma.partnerTransaction.create({
         data: {
           partnerId,
-          amount: new Decimal(totalPrice).mul(0.3).toNumber(),
+          amount: new Decimal(totalPrice).mul(0.15).toNumber(),
         },
       });
     }

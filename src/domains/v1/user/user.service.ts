@@ -1,7 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../shared/prisma.service';
 import * as nodemailer from 'nodemailer';
-import { User, UserType } from '@prisma/client';
+import { PaymentStatus, User, UserType } from '@prisma/client';
 import { AddBalanceDTO } from './dto/add-balance.dto';
 import { RemoveBalanceDTO } from './dto/remove-balance.dto';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -383,8 +383,15 @@ export class UserService {
     const request = await this.prisma.partnerPayoutRequest.create({
       data: {
         partnerId: user.id,
-        amount: user.balance.toNumber(),
+        amount: totalEarned,
         wallet,
+      },
+    });
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        totalPartnerEarn: { increment: totalEarned },
       },
     });
 
@@ -394,16 +401,52 @@ export class UserService {
     };
   }
   async getPartnerDetails(userId: string) {
-    const [transactions, payout] = await this.prisma.$transaction([
-      this.prisma.partnerTransaction.findMany({
-        where: { partnerId: userId },
-      }),
-      this.prisma.partnerPayoutRequest.findFirst({
-        where: { partnerId: userId },
-      }),
-    ]);
-    return { transactions: transactions, payout: payout };
+    const now = new Date();
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(
+      now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear(),
+      now.getMonth() === 0 ? 11 : now.getMonth() - 1,
+      1,
+    );
+
+    const [referrals, allTransactions, payout, user] =
+      await this.prisma.$transaction([
+        this.prisma.referral.findMany({ where: { partnerId: userId } }),
+        this.prisma.partnerTransaction.findMany({
+          where: { partnerId: userId },
+        }),
+        this.prisma.partnerPayoutRequest.findFirst({
+          where: { partnerId: userId },
+        }),
+        this.prisma.user.findUnique({ where: { id: userId } }),
+      ]);
+
+    if (!user) {
+      throw new HttpException('User not found', 404);
+    }
+
+    const earnedLastMonth = allTransactions.reduce((sum, tx) => {
+      const createdAt = new Date(tx.createdAt);
+      if (createdAt >= startOfLastMonth && createdAt < startOfThisMonth) {
+        return sum.plus(tx.amount);
+      }
+      return sum;
+    }, new Decimal(0));
+    const availableBalance = allTransactions.reduce(
+      (sum, tx) => sum.plus(tx.amount),
+      new Decimal(0),
+    );
+
+    return {
+      referrals,
+      transactions: allTransactions,
+      payout,
+      earnedLastMonth,
+      availableBalance,
+      allTimeEarn: user.totalPartnerEarn,
+    };
   }
+
   async getPayoutRequests() {
     const payout = await this.prisma.partnerPayoutRequest.findMany();
 
@@ -412,6 +455,28 @@ export class UserService {
     }
 
     return { payout: payout };
+  }
+  async adminPayoutRequest(id: string, status: PaymentStatus) {
+    const request = await this.prisma.partnerPayoutRequest.findUnique({
+      where: { id: id },
+    });
+    if (!request) {
+      throw new HttpException('Request not found', 404);
+    }
+
+    await this.prisma.partnerPayoutRequest.update({
+      where: { id: id },
+      data: { status: status },
+    });
+    if (status === 'PAID') {
+      await this.prisma.partnerPayoutRequest.update({
+        where: { id: id },
+        data: { status: status },
+      });
+      await this.prisma.partnerTransaction.deleteMany({
+        where: { partnerId: request.partnerId },
+      });
+    }
   }
   async addBalance(data: AddBalanceDTO) {
     const { user, email, amount } = data;

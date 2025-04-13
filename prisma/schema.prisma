@@ -54,6 +54,7 @@ model User {
   change_password_code  String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+  totalPartnerEarn      Decimal  @default(0)
   orders                Order[]
   payments              Payment[]
   referrals             Referral[]          @relation("UserReferrals")

@@ -44,10 +44,11 @@ export class AuthService {
         ?.split('-')[0]
         ?.toLowerCase() || 'en';
 
-    const { password, ...userDetails } = registerDto;
+    const { password, referralId, email } = registerDto;
     const user = await this.prisma.user.findUnique({
       where: { email: registerDto.email },
     });
+    console.log('referralID', referralId);
     if (user) {
       throw new HttpException('User with this email already exists', 400);
     }
@@ -56,20 +57,19 @@ export class AuthService {
 
     const current_user = await this.prisma.user.create({
       data: {
-        ...userDetails,
+        email: email,
         password: hashedPassword,
         ip: ip,
         lang: lang,
       },
     });
+    console.log('current_user', current_user);
 
     await this.userService.sendVerificationEmail(registerDto.email, lang);
 
-    if (registerDto.referralId) {
-      await this.userService.addPartner(
-        registerDto.referralId,
-        current_user.id,
-      );
+    if (referralId) {
+      console.log('worked');
+      await this.userService.addPartner(referralId, current_user.id);
     }
 
     return current_user;

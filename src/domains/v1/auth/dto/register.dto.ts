@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   MinLength,
   IsOptional,
+  IsUUID,
 } from 'class-validator';
 
 export class RegisterDto {
@@ -17,6 +18,7 @@ export class RegisterDto {
   password: string;
 
   @IsString()
+  @IsUUID()
   @IsOptional()
   referralId: string;
 }

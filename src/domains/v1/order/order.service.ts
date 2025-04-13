@@ -170,6 +170,7 @@ export class OrderService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: order.userId },
+      include: { referredBy: true },
     });
 
     if (!user) {
@@ -248,6 +249,16 @@ export class OrderService {
       await this.prisma.coupon.update({
         where: { code: paymentDto.promocode },
         data: { limit: { decrement: 1 } },
+      });
+    }
+    if (user.referredBy) {
+      const partnerId = user.referredBy.partnerId;
+
+      await this.prisma.partnerTransaction.create({
+        data: {
+          partnerId,
+          amount: new Decimal(totalPrice).mul(0.3).toNumber(),
+        },
       });
     }
 

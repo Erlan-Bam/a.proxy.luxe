@@ -20,6 +20,8 @@ import { SupportMessageDto } from './dto/send-support.dto';
 import { AddAuthDto } from './dto/add-auth.dto';
 import { ProductService } from 'src/domains/product/product.service';
 import { UpdateListDto } from './dto/update-list.dto';
+import { PayoutPartner } from './dto/payout-partner.dto';
+import { AdminGuard } from '../auth/guards/admin.guard';
 
 @Controller('v1/user')
 export class UserController {
@@ -89,6 +91,24 @@ export class UserController {
   async removeBalance(@Body() data: RemoveBalanceDTO, @Request() req) {
     data.user = req.user;
     return this.userService.removeBalance(data);
+  }
+
+  @Post('partner/payout')
+  @UseGuards(AuthGuard('jwt'))
+  async payoutPartner(@Body() body: PayoutPartner) {
+    return await this.userService.payoutPartner(body);
+  }
+
+  @Get('partner/details')
+  @UseGuards(AuthGuard('jwt'))
+  async getPartnerDetails(@Request() request) {
+    return await this.userService.getPartnerDetails(request.user.id);
+  }
+
+  @Get('admin/payout-requests')
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
+  async getPayoutRequests() {
+    return await this.userService.getPayoutRequests();
   }
 
   @Post('ban')

@@ -11,6 +11,7 @@ import { SupportMessageDto } from './dto/send-support.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AddAuthDto } from './dto/add-auth.dto';
 import { ProductService } from 'src/domains/product/product.service';
+import { PayoutPartner } from './dto/payout-partner.dto';
 
 @Injectable()
 export class UserService {
@@ -333,6 +334,84 @@ export class UserService {
         isBanned: true,
       },
     });
+  }
+  async addPartner(partnerId: string, userId: string) {
+    const partner = await this.prisma.user.findUnique({
+      where: { id: partnerId },
+    });
+    if (!partner) {
+      return null;
+    }
+    return await this.prisma.referral.create({
+      data: {
+        partnerId: partnerId,
+        userId: userId,
+      },
+    });
+  }
+  async payoutPartner(data: PayoutPartner) {
+    const { wallet, user } = data;
+    const partner = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      include: { partnerTransactions: true },
+    });
+    if (!partner) {
+      throw new HttpException('Partner not found', 400);
+    }
+
+    const MIN_PAYOUT = new Decimal(5);
+
+    const totalEarned = partner.partnerTransactions.reduce(
+      (sum, tx) => sum.plus(tx.amount),
+      new Decimal(0),
+    );
+    if (MIN_PAYOUT.lt(totalEarned)) {
+      throw new HttpException('Min amount of 5$', 400);
+    }
+
+    const existingPending = await this.prisma.partnerPayoutRequest.findFirst({
+      where: {
+        partnerId: user.id,
+        status: 'PENDING',
+      },
+    });
+
+    if (existingPending) {
+      throw new HttpException('You already have a pending payout request', 400);
+    }
+
+    const request = await this.prisma.partnerPayoutRequest.create({
+      data: {
+        partnerId: user.id,
+        amount: user.balance.toNumber(),
+        wallet,
+      },
+    });
+
+    return {
+      message: 'Payout request created',
+      request: request,
+    };
+  }
+  async getPartnerDetails(userId: string) {
+    const [transactions, payout] = await this.prisma.$transaction([
+      this.prisma.partnerTransaction.findMany({
+        where: { partnerId: userId },
+      }),
+      this.prisma.partnerPayoutRequest.findFirst({
+        where: { partnerId: userId },
+      }),
+    ]);
+    return { transactions: transactions, payout: payout };
+  }
+  async getPayoutRequests() {
+    const payout = await this.prisma.partnerPayoutRequest.findMany();
+
+    if (!payout) {
+      throw new HttpException('Payout requests not found', 404);
+    }
+
+    return { payout: payout };
   }
   async addBalance(data: AddBalanceDTO) {
     const { user, email, amount } = data;

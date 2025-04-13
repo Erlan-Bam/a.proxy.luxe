@@ -65,6 +65,13 @@ export class AuthService {
 
     await this.userService.sendVerificationEmail(registerDto.email, lang);
 
+    if (registerDto.referralId) {
+      await this.userService.addPartner(
+        registerDto.referralId,
+        current_user.id,
+      );
+    }
+
     return current_user;
   }
 

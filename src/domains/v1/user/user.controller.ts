@@ -22,6 +22,8 @@ import { ProductService } from 'src/domains/product/product.service';
 import { UpdateListDto } from './dto/update-list.dto';
 import { PayoutPartner } from './dto/payout-partner.dto';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import { request } from 'http';
+import { FinishPayoutDto } from './dto/finish-payout.dto';
 
 @Controller('v1/user')
 export class UserController {
@@ -95,7 +97,8 @@ export class UserController {
 
   @Post('partner/payout')
   @UseGuards(AuthGuard('jwt'))
-  async payoutPartner(@Body() body: PayoutPartner) {
+  async payoutPartner(@Body() body: PayoutPartner, @Request() request) {
+    body.user = request.user as User;
     return await this.userService.payoutPartner(body);
   }
 
@@ -109,6 +112,11 @@ export class UserController {
   @UseGuards(AuthGuard('jwt'), AdminGuard)
   async getPayoutRequests() {
     return await this.userService.getPayoutRequests();
+  }
+
+  @Post('admin/finish-payout')
+  async finishPayoutRequest(@Body() data: FinishPayoutDto) {
+    return await this.userService.finishPayoutRequest(data.id, data.status);
   }
 
   @Post('ban')

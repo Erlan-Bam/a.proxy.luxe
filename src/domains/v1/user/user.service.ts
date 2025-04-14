@@ -448,7 +448,9 @@ export class UserService {
   }
 
   async getPayoutRequests() {
-    const payout = await this.prisma.partnerPayoutRequest.findMany();
+    const payout = await this.prisma.partnerPayoutRequest.findMany({
+      where: { status: 'PENDING' },
+    });
 
     if (!payout) {
       throw new HttpException('Payout requests not found', 404);
@@ -456,7 +458,7 @@ export class UserService {
 
     return { payout: payout };
   }
-  async adminPayoutRequest(id: string, status: PaymentStatus) {
+  async finishPayoutRequest(id: string, status: PaymentStatus) {
     const request = await this.prisma.partnerPayoutRequest.findUnique({
       where: { id: id },
     });

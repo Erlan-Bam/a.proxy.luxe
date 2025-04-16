@@ -139,6 +139,13 @@ export class OrderService {
     const [payments, totalPayments] = await this.prisma.$transaction([
       this.prisma.payment.findMany({
         orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              email: true,
+            },
+          },
+        },
         skip,
         take: limit,
       }),

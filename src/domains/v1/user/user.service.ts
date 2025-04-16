@@ -12,6 +12,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AddAuthDto } from './dto/add-auth.dto';
 import { ProductService } from 'src/domains/product/product.service';
 import { PayoutPartner } from './dto/payout-partner.dto';
+import axios from 'axios';
 
 @Injectable()
 export class UserService {
@@ -999,5 +1000,27 @@ export class UserService {
         html,
       });
     }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async updateCurrency() {
+    const response = await axios.get(
+      'https://api.freecurrencyapi.com/v1/latest',
+      {
+        params: {
+          apikey: process.env.FREE_CURRENCY_API,
+          base_currency: 'USD',
+          currencies: 'RUB',
+        },
+      },
+    );
+    const value = response.data.data.RUB;
+    await this.prisma.currency.update({
+      where: { name: 'rub' },
+      data: { value },
+    });
+  }
+  async getCurrency() {
+    return await this.prisma.currency.findUnique({ where: { name: 'rub' } });
   }
 }

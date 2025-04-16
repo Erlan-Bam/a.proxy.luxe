@@ -22,7 +22,6 @@ import { ProductService } from 'src/domains/product/product.service';
 import { UpdateListDto } from './dto/update-list.dto';
 import { PayoutPartner } from './dto/payout-partner.dto';
 import { AdminGuard } from '../auth/guards/admin.guard';
-import { request } from 'http';
 import { FinishPayoutDto } from './dto/finish-payout.dto';
 
 @Controller('v1/user')
@@ -124,6 +123,11 @@ export class UserController {
   async banUser(@Body() data: BanUserDTO, @Request() req) {
     data.user = req.user;
     return this.userService.banUser(data);
+  }
+
+  @Get('currency')
+  async getCurrency() {
+    return await this.userService.getCurrency();
   }
 
   @Post('unban')

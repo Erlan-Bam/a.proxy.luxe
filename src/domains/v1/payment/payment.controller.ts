@@ -117,6 +117,7 @@ export class PaymentController {
 
   @Post('payeer/success')
   async payeerSuccessfulPayment(@Request() request) {
+    console.log(request);
     await this.paymentService.successfulPayment(
       request.body.m_orderid,
       Number(request.body.m_amount),

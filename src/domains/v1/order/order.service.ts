@@ -116,7 +116,8 @@ export class OrderService {
 
   async generalLog(page = 1, limit = 50) {
     const skip = (page - 1) * limit;
-    const [orders, total] = await this.prisma.$transaction([
+
+    const [orders, totalOrders] = await this.prisma.$transaction([
       this.prisma.order.findMany({
         where: { status: 'PAID' },
         include: {
@@ -126,7 +127,8 @@ export class OrderService {
             },
           },
         },
-        skip: skip,
+        orderBy: { createdAt: 'desc' },
+        skip,
         take: limit,
       }),
       this.prisma.order.count({
@@ -134,12 +136,24 @@ export class OrderService {
       }),
     ]);
 
+    const [payments, totalPayments] = await this.prisma.$transaction([
+      this.prisma.payment.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.payment.count(),
+    ]);
+
     return {
-      data: orders,
-      total,
+      orders,
+      totalOrders,
+      payments,
+      totalPayments,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalOrderPages: Math.ceil(totalOrders / limit),
+      totalPaymentPages: Math.ceil(totalPayments / limit),
     };
   }
 

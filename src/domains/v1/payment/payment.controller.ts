@@ -111,15 +111,15 @@ export class PaymentController {
     @Body() data: CreateInvoicePayeer,
     @Request() request,
   ) {
-    data.orderId = request.user.id;
+    data.orderId = `${request.user.id}A${Math.floor(100 + Math.random() * 900)}`;
     return this.paymentService.createInvoicePayeer(data);
   }
 
   @Post('payeer/success')
   async payeerSuccessfulPayment(@Request() request) {
-    console.log(request);
+    const orderId = request.body.m_orderid.split('A')[0];
     await this.paymentService.successfulPayment(
-      request.body.m_orderid,
+      orderId,
       Number(request.body.m_amount),
       'PAYEER',
     );

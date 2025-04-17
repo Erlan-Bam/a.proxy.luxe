@@ -360,7 +360,7 @@ export class UserService {
       throw new HttpException('Partner not found', 400);
     }
 
-    const MIN_PAYOUT = new Decimal(5);
+    const MIN_PAYOUT = new Decimal(0.1);
 
     const totalEarned = partner.partnerTransactions.reduce(
       (sum, tx) => sum.plus(tx.amount),
@@ -548,9 +548,19 @@ export class UserService {
 
   async addPromocode(data: AddPromocodeDTO) {
     let { user, promocode, discount, limit } = data;
+    let userId: string | undefined = undefined;
 
     if (user.type !== UserType.ADMIN) {
-      throw new HttpException('Only admins can add balance', 403);
+      const existingCoupon = await this.prisma.coupon.findFirst({
+        where: {
+          userId: user.id,
+        },
+      });
+
+      if (existingCoupon) {
+        throw new HttpException('You already have an active promo code', 400);
+      }
+      (limit = 999999999), (discount = 5), (userId = user.id);
     }
 
     return await this.prisma.coupon.create({
@@ -558,8 +568,12 @@ export class UserService {
         code: promocode,
         discount: discount,
         limit: limit,
+        userId: userId,
       },
     });
+  }
+  async getCouponByUserId(userId: string) {
+    return await this.prisma.coupon.findUnique({ where: { userId: userId } });
   }
   async sendProxyEmail(email: string, lang: string = 'en'): Promise<any> {
     const expirationDate = new Date();
@@ -699,12 +713,31 @@ export class UserService {
     return await this.prisma.coupon.findMany();
   }
   async deletePromocode(user: User, code: string) {
-    if (user.type !== UserType.ADMIN) {
-      throw new HttpException('Admins only', 403);
+    const coupon = await this.prisma.coupon.findFirst({
+      where: {
+        code: code,
+      },
+    });
+
+    if (!coupon) {
+      throw new HttpException('Coupon not found', 404);
     }
 
-    return await this.prisma.coupon.delete({ where: { code: code } });
+    const isOwner = coupon.userId === user.id;
+    const isAdmin = user.type === UserType.ADMIN;
+
+    if (!isOwner && !isAdmin) {
+      throw new HttpException(
+        'You do not have permission to delete this coupon',
+        403,
+      );
+    }
+
+    return await this.prisma.coupon.delete({
+      where: { code: code },
+    });
   }
+
   async sendSupportEmail(
     dto: SupportMessageDto,
   ): Promise<{ success: boolean }> {

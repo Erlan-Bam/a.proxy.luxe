@@ -61,6 +61,7 @@ model User {
   referredBy            Referral?           @relation("UserReferredBy")
   partnerTransactions   PartnerTransaction[]
   partnerPayoutRequests PartnerPayoutRequest[]
+  coupon                Coupon?             @relation("UserCoupon")
 }
 model Currency {
   id     Int     @id @default(autoincrement())
@@ -81,6 +82,8 @@ model Coupon {
   code        String   @id @db.VarChar(255)
   discount    Int
   limit       Int      @default(100)
+  userId      String?  @unique
+  user        User?    @relation("UserCoupon", fields: [userId], references: [id])
 }
 
 model Article {

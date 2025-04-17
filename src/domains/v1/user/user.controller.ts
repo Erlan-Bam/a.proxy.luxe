@@ -35,6 +35,7 @@ export class UserController {
   @UseGuards(AuthGuard('jwt'))
   async me(@Request() request) {
     const user = request.user as User;
+    const coupon = await this.userService.getCouponByUserId(user.id);
 
     return {
       id: user.id,
@@ -43,6 +44,7 @@ export class UserController {
       isVerified: user.isVerified,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      coupon_code: coupon?.code,
     };
   }
 

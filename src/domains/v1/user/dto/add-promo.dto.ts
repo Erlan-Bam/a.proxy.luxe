@@ -18,9 +18,11 @@ export class AddPromocodeDTO {
   @IsInt()
   @Min(1)
   @Max(100)
+  @IsOptional()
   discount: number;
 
   @IsInt()
   @IsPositive()
+  @IsOptional()
   limit: number;
 }

@@ -366,7 +366,7 @@ export class UserService {
       (sum, tx) => sum.plus(tx.amount),
       new Decimal(0),
     );
-    if (MIN_PAYOUT.lt(totalEarned)) {
+    if (MIN_PAYOUT.gt(totalEarned)) {
       throw new HttpException('Min amount of 5$', 400);
     }
 

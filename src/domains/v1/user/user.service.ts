@@ -360,7 +360,7 @@ export class UserService {
       throw new HttpException('Partner not found', 400);
     }
 
-    const MIN_PAYOUT = new Decimal(0.1);
+    const MIN_PAYOUT = new Decimal(5);
 
     const totalEarned = partner.partnerTransactions.reduce(
       (sum, tx) => sum.plus(tx.amount),

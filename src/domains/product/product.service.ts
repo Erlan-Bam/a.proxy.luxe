@@ -33,6 +33,8 @@ export class ProductService {
   ) {
     this.proxySeller = axios.create({
       baseURL: `https://proxy-seller.com/personal/api/v1/${configService.get<string>('PROXY_SELLER')}`,
+      timeout: 5000,
+      family: 4,
     });
   }
 
@@ -157,7 +159,6 @@ export class ProductService {
     const response: AxiosResponse<ReferenceSingleResponse> =
       await this.proxySeller.get(`/reference/list/${type}`);
     const reference = response.data;
-    console.log(response.data);
 
     if (!reference.data) {
       return {

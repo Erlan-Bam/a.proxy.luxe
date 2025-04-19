@@ -157,7 +157,7 @@ export class ProductService {
     const response: AxiosResponse<ReferenceSingleResponse> =
       await this.proxySeller.get(`/reference/list/${type}`);
     const reference = response.data;
-    console.log(response);
+    console.log(response.data);
 
     if (!reference.data) {
       return {

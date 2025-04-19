@@ -127,6 +127,11 @@ export class UserController {
     return this.userService.banUser(data);
   }
 
+  @Get('currency/:name')
+  async getCurrencyByName(@Param('name') name: string) {
+    return this.userService.getCurrencyByName(name);
+  }
+
   @Get('currency')
   async getCurrency() {
     return await this.userService.getCurrency();

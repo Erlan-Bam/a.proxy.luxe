@@ -526,6 +526,9 @@ export class UserService {
     if (user.type !== UserType.ADMIN) {
       throw new HttpException('Only admins can add balance', 403);
     }
+    if (user.email === email) {
+      throw new HttpException('You cannot ban yourself', 400);
+    }
 
     return await this.prisma.user.update({
       where: { email: email },

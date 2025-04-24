@@ -25,11 +25,6 @@ export class PaymentController {
   private readonly secretKey: string;
   private readonly payeerSecretKey: string;
   private readonly digisellerApiKey: string;
-  private readonly payeerAllowedIPs = [
-    '185.71.65.92',
-    '185.71.65.189',
-    '149.202.17.210',
-  ];
 
   constructor(
     private readonly paymentService: PaymentService,
@@ -130,8 +125,6 @@ export class PaymentController {
   @Post('payeer/success')
   async payeerSuccessfulPayment(@Request() req) {
     const body = req.body;
-    console.log('PAYEER BODY', body);
-    console.log('PAYEER API', body);
 
     // Формирование хеша
     const hashData = [
@@ -158,8 +151,6 @@ export class PaymentController {
       .update(hashData.join(':'))
       .digest('hex')
       .toUpperCase();
-
-    console.log('hash comparison', sign, body.m_sign, sign === body.m_sign);
 
     // Проверка подписи и статуса
     if (sign === body.m_sign && body.m_status === 'success') {

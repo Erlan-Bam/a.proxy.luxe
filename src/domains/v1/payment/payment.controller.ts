@@ -123,23 +123,44 @@ export class PaymentController {
     @Body() data: CreateInvoicePayeer,
     @Request() request,
   ) {
-    console.log('PAYEER REQUEST INVOICE', request.body);
     data.orderId = `${request.user.id}A${Math.floor(100 + Math.random() * 900)}`;
     return this.paymentService.createInvoicePayeer(data);
   }
 
   @Post('payeer/success')
   async payeerSuccessfulPayment(@Request() req) {
-    const ip = req.ip || req.connection.remoteAddress;
     const body = req.body;
+    console.log('PAYEER BODY', body);
+    console.log('PAYEER API', body);
 
-    // Проверка IP
-    if (!this.payeerAllowedIPs.includes(ip)) {
-      throw new HttpException('IP not allowed', 403);
+    // Формирование хеша
+    const hashData = [
+      body.m_operation_id,
+      body.m_operation_ps,
+      body.m_operation_date,
+      body.m_operation_pay_date,
+      body.m_shop,
+      body.m_orderid,
+      body.m_amount,
+      body.m_curr,
+      body.m_desc,
+      body.m_status,
+    ];
+
+    if (body.m_params) {
+      hashData.push(body.m_params);
     }
 
+    hashData.push(this.payeerSecretKey);
+
+    const sign = crypto
+      .createHash('sha256')
+      .update(hashData.join(':'))
+      .digest('hex')
+      .toUpperCase();
+
     // Проверка подписи и статуса
-    if (body.m_status === 'success') {
+    if (sign === body.m_sign && body.m_status === 'success') {
       const orderId = body.m_orderid.split('A')[0];
 
       await this.paymentService.successfulPayment(

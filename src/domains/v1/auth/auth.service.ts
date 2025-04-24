@@ -48,7 +48,6 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: registerDto.email },
     });
-    console.log('referralID', referralId);
     if (user) {
       throw new HttpException('User with this email already exists', 400);
     }
@@ -63,12 +62,10 @@ export class AuthService {
         lang: lang,
       },
     });
-    console.log('current_user', current_user);
 
     await this.userService.sendVerificationEmail(registerDto.email, lang);
 
     if (referralId) {
-      console.log('worked');
       await this.userService.addPartner(referralId, current_user.id);
     }
 

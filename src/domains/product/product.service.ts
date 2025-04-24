@@ -400,7 +400,6 @@ export class ProductService {
         };
       }
     } catch (error) {
-      console.log(error);
       throw new HttpException('Failed to place an order', 500);
     }
   }

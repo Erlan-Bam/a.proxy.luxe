@@ -159,6 +159,8 @@ export class PaymentController {
       .digest('hex')
       .toUpperCase();
 
+    console.log('hash comparison', sign, body.m_sign, sign === body.m_sign);
+
     // Проверка подписи и статуса
     if (sign === body.m_sign && body.m_status === 'success') {
       const orderId = body.m_orderid.split('A')[0];

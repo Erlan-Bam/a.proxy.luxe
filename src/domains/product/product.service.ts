@@ -393,8 +393,9 @@ export class ProductService {
         if (resident) {
           console.log({
             is_link_date: false,
-            traffic_limit:
+            traffic_limit: String(
               Number(resident.package_info.traffic_limit) + Number(tariff),
+            ),
             expired_at: this.getOneMonthLaterFormatted(),
             package_key: resident.package_info.package_key,
           });
@@ -402,8 +403,9 @@ export class ProductService {
             '/residentsubuser/update',
             {
               is_link_date: false,
-              traffic_limit:
+              traffic_limit: String(
                 Number(resident.package_info.traffic_limit) + Number(tariff),
+              ),
               expired_at: this.getOneMonthLaterFormatted(),
               package_key: resident.package_info.package_key,
             },

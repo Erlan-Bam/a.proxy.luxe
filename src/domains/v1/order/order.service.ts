@@ -245,6 +245,7 @@ export class OrderService {
       periodId: order.periodDays ? order.periodDays : undefined,
       quantity: order.quantity ? order.quantity : undefined,
       protocol: order.proxyType ? order.proxyType : undefined,
+      userId: order.userId,
     };
 
     const placedOrder = await this.productService.placeOrder(orderInfo);

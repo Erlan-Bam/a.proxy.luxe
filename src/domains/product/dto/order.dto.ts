@@ -15,4 +15,5 @@ export interface OrderInfo {
   tariffId?: number;
   targetSectionId?: number;
   customTargetName?: null | string;
+  userId: string;
 }

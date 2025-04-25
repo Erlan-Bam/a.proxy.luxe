@@ -385,19 +385,40 @@ export class ProductService {
           paymentId: 1,
         });
         const tariff = await this.convertToBytes(orderInfo.tariff as string);
-        const response = await this.proxySeller.post(
-          '/residentsubuser/create',
-          {
-            is_link_date: false,
-            rotation: 1,
-            traffic_limit: tariff.toString(),
-            expired_at: this.getOneMonthLaterFormatted(),
-          },
+        const proxies = await this.getActiveProxyList(
+          orderInfo.userId,
+          'resident',
         );
-        return {
-          package_key: response.data.data.package_key,
-          orderId: tariffResponse.data.data.orderId.toString(),
-        };
+        const resident = proxies.data?.items[0];
+        if (resident) {
+          const response = await this.proxySeller.post(
+            '/residentsubuser/update',
+            {
+              is_link_date: false,
+              traffic_limit:
+                Number(resident.package_info.traffic_limit) + Number(tariff),
+              expired_at: this.getOneMonthLaterFormatted(),
+            },
+          );
+          return {
+            package_key: response.data.data.package_key,
+            orderId: tariffResponse.data.data.orderId.toString(),
+          };
+        } else {
+          const response = await this.proxySeller.post(
+            '/residentsubuser/create',
+            {
+              is_link_date: false,
+              rotation: 1,
+              traffic_limit: tariff.toString(),
+              expired_at: this.getOneMonthLaterFormatted(),
+            },
+          );
+          return {
+            package_key: response.data.data.package_key,
+            orderId: tariffResponse.data.data.orderId.toString(),
+          };
+        }
       }
     } catch (error) {
       throw new HttpException('Failed to place an order', 500);

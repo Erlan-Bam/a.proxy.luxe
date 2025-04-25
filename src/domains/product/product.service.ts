@@ -391,6 +391,13 @@ export class ProductService {
         );
         const resident = proxies.data?.items[0];
         if (resident) {
+          console.log({
+            is_link_date: false,
+            traffic_limit:
+              Number(resident.package_info.traffic_limit) + Number(tariff),
+            expired_at: this.getOneMonthLaterFormatted(),
+            package_key: resident.package_info.package_key,
+          });
           const response = await this.proxySeller.post(
             '/residentsubuser/update',
             {
@@ -398,8 +405,10 @@ export class ProductService {
               traffic_limit:
                 Number(resident.package_info.traffic_limit) + Number(tariff),
               expired_at: this.getOneMonthLaterFormatted(),
+              package_key: resident.package_info.package_key,
             },
           );
+          console.log(response.data);
           return {
             package_key: response.data.data.package_key,
             orderId: tariffResponse.data.data.orderId.toString(),

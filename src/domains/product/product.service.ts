@@ -391,14 +391,6 @@ export class ProductService {
         );
         const resident = proxies.data?.items[0];
         if (resident) {
-          console.log({
-            is_link_date: false,
-            traffic_limit: String(
-              Number(resident.package_info.traffic_limit) + Number(tariff),
-            ),
-            expired_at: this.getOneMonthLaterFormatted(),
-            package_key: resident.package_info.package_key,
-          });
           const response = await this.proxySeller.post(
             '/residentsubuser/update',
             {
@@ -406,11 +398,10 @@ export class ProductService {
               traffic_limit: String(
                 Number(resident.package_info.traffic_limit) + Number(tariff),
               ),
-              expired_at: this.getOneMonthLaterFormatted(),
+              expired_at: await this.getOneMonthLaterFormatted(),
               package_key: resident.package_info.package_key,
             },
           );
-          console.log(response.data);
           return {
             package_key: response.data.data.package_key,
             orderId: tariffResponse.data.data.orderId.toString(),
@@ -422,7 +413,7 @@ export class ProductService {
               is_link_date: false,
               rotation: 1,
               traffic_limit: tariff.toString(),
-              expired_at: this.getOneMonthLaterFormatted(),
+              expired_at: await this.getOneMonthLaterFormatted(),
             },
           );
           return {
@@ -565,12 +556,12 @@ export class ProductService {
   }
   async getOneMonthLaterFormatted(): Promise<string> {
     const now = new Date();
-    const oneMonthLater = new Date(now);
-    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+    const thirtyDaysLater = new Date(now);
+    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
 
-    const day = String(oneMonthLater.getDate()).padStart(2, '0');
-    const month = String(oneMonthLater.getMonth() + 1).padStart(2, '0');
-    const year = oneMonthLater.getFullYear();
+    const day = String(thirtyDaysLater.getDate()).padStart(2, '0');
+    const month = String(thirtyDaysLater.getMonth() + 1).padStart(2, '0'); // months are 0-indexed
+    const year = thirtyDaysLater.getFullYear();
 
     return `${day}.${month}.${year}`;
   }

@@ -60,6 +60,29 @@ export class PaymentService {
   }
 
   async successfulPayment(userId: string, amount: number, method: string) {
+    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const foundPayment = await this.prisma.payment.findFirst({
+      where: {
+        userId: userId,
+        price: amount,
+        method: method,
+        createdAt: {
+          gte: fourHoursAgo,
+        },
+      },
+    });
+
+    if (foundPayment) {
+      console.log(
+        '✅ Payment already exists in last 4 hours, skipping...',
+        'time=',
+        fourHoursAgo,
+        'payment=',
+        foundPayment,
+      );
+      return foundPayment;
+    }
+
     await this.prisma.user.update({
       where: { id: userId },
       data: { balance: { increment: amount } },

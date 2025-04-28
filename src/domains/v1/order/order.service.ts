@@ -252,21 +252,20 @@ export class OrderService {
     const package_key = placedOrder.package_key,
       orderId = placedOrder.orderId;
 
-    await this.prisma.$transaction([
-      this.prisma.order.update({
+    if (!order.proxySellerId) {
+      await this.prisma.order.update({
         where: { id: order.id },
         data: {
           proxySellerId: package_key ? package_key : orderId,
           status: 'PAID',
           orderId: orderId,
         },
-      }),
-
-      this.prisma.user.update({
-        where: { id: order.userId },
-        data: { balance: { decrement: totalPrice } },
-      }),
-    ]);
+      });
+    }
+    await this.prisma.user.update({
+      where: { id: order.userId },
+      data: { balance: { decrement: totalPrice } },
+    });
     if (paymentDto.promocode) {
       await this.prisma.coupon.update({
         where: { code: paymentDto.promocode },

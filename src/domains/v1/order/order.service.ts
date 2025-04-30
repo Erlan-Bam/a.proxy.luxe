@@ -251,21 +251,27 @@ export class OrderService {
     const placedOrder = await this.productService.placeOrder(orderInfo);
     const package_key = placedOrder.package_key,
       orderId = placedOrder.orderId;
-
-    if (!order.proxySellerId) {
+    if (order.type === 'resident') {
+      if (order.proxySellerId === null && package_key !== undefined) {
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: {
+            proxySellerId: package_key,
+            status: 'PAID',
+            orderId: orderId,
+          },
+        });
+      }
+    } else {
       await this.prisma.order.update({
         where: { id: order.id },
         data: {
-          proxySellerId: package_key ? package_key : orderId,
+          proxySellerId: orderId,
           status: 'PAID',
           orderId: orderId,
         },
       });
     }
-    await this.prisma.user.update({
-      where: { id: order.userId },
-      data: { balance: { decrement: totalPrice } },
-    });
     if (paymentDto.promocode) {
       await this.prisma.coupon.update({
         where: { code: paymentDto.promocode },

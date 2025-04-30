@@ -398,7 +398,6 @@ export class ProductService {
               traffic_limit: String(
                 Number(resident.package_info.traffic_limit) + Number(tariff),
               ),
-              expired_at: await this.getOneMonthLaterFormatted(),
               package_key: resident.package_info.package_key,
             },
           );
@@ -413,7 +412,6 @@ export class ProductService {
               is_link_date: false,
               rotation: 1,
               traffic_limit: tariff.toString(),
-              expired_at: await this.getOneMonthLaterFormatted(),
             },
           );
           return {
@@ -423,6 +421,7 @@ export class ProductService {
         }
       }
     } catch (error) {
+      console.log(error);
       throw new HttpException('Failed to place an order', 500);
     }
   }

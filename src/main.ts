@@ -2,13 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './domains/app.module';
 import { ValidationPipe } from '@nestjs/common';
 import * as bodyParser from 'body-parser';
-import { setDefaultResultOrder } from 'node:dns';
 export const baseUrl =
   process.env.NODE_ENV === 'production'
     ? 'https://api.proxy.luxe'
     : 'http://localhost:6001';
 
-setDefaultResultOrder('ipv4first');
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 

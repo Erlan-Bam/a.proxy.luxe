@@ -33,8 +33,6 @@ export class ProductService {
   ) {
     this.proxySeller = axios.create({
       baseURL: `https://proxy-seller.com/personal/api/v1/${configService.get<string>('PROXY_SELLER')}`,
-      timeout: 5000,
-      family: 4,
     });
   }
 

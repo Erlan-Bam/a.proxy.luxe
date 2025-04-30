@@ -251,8 +251,15 @@ export class OrderService {
     const placedOrder = await this.productService.placeOrder(orderInfo);
     const package_key = placedOrder.package_key,
       orderId = placedOrder.orderId;
+    console.log(package_key, orderId);
+    console.log(order.proxySellerId);
+    await this.prisma.user.update({
+      where: { id: order.userId },
+      data: { balance: { decrement: totalPrice } },
+    });
     if (order.type === 'resident') {
-      if (order.proxySellerId === null && package_key !== undefined) {
+      console.log('resident');
+      if (package_key && order.proxySellerId !== package_key) {
         await this.prisma.order.update({
           where: { id: order.id },
           data: {
@@ -263,6 +270,7 @@ export class OrderService {
         });
       }
     } else {
+      console.log('non resident');
       await this.prisma.order.update({
         where: { id: order.id },
         data: {

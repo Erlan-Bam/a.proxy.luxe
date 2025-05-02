@@ -396,6 +396,7 @@ export class ProductService {
               traffic_limit: String(
                 Number(resident.package_info.traffic_limit) + Number(tariff),
               ),
+              is_active: true,
               package_key: resident.package_info.package_key,
             },
           );
@@ -409,6 +410,7 @@ export class ProductService {
             {
               is_link_date: false,
               rotation: 1,
+              is_active: true,
               traffic_limit: tariff.toString(),
             },
           );
@@ -483,6 +485,7 @@ export class ProductService {
     });
 
     if (response.data.status !== 'success') {
+      console.log(response.data);
       throw new HttpException(response.data.errors[0].message, 400);
     }
 

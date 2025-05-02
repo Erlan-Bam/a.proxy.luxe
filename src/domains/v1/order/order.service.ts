@@ -256,10 +256,14 @@ export class OrderService {
       data: { balance: { decrement: totalPrice } },
     });
     if (order.type === 'resident') {
+      const existingPK = await this.prisma.order.findUnique({
+        where: { proxySellerId: package_key },
+      });
       if (package_key) {
         await this.prisma.order.update({
           where: { id: order.id },
           data: {
+            proxySellerId: existingPK ? null : package_key,
             status: 'PAID',
             orderId: orderId,
           },

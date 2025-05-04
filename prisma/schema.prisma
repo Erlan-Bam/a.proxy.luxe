@@ -121,6 +121,7 @@ model Payment {
   user            User          @relation(fields: [userId], references: [id])
   price           Decimal
   method          String
+  inv             Int?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 }

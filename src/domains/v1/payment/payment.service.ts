@@ -59,7 +59,12 @@ export class PaymentService {
     }
   }
 
-  async successfulPayment(userId: string, amount: number, method: string) {
+  async successfulPayment(
+    userId: string,
+    amount: number,
+    method: string,
+    inv?: number,
+  ) {
     const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
     const foundPayment = await this.prisma.payment.findFirst({
       where: {
@@ -81,6 +86,19 @@ export class PaymentService {
         foundPayment,
       );
       return foundPayment;
+    }
+    if (method === 'DIGISELLER') {
+      const foundByInv = await this.prisma.payment.findFirst({
+        where: { inv },
+      });
+      if (foundByInv) {
+        console.log(
+          '✅ Payment already exists by inv, skipping...',
+          'payment=',
+          foundByInv,
+        );
+        return foundByInv;
+      }
     }
 
     await this.prisma.user.update({

@@ -194,8 +194,10 @@ export class PaymentController {
         sign: signature,
       },
     );
+    console.log('digiseller', code);
     let userId: string;
     let amount: number;
+    let inv: number;
     let lang: string = 'en';
     try {
       const payment = await axios.get(
@@ -205,27 +207,24 @@ export class PaymentController {
 
       userId = options[0].value;
       amount = payment.data.amount_usd;
+      inv = payment.data.inv;
       lang = payment.data.lang;
-    } catch {
-      try {
-        const payment = await axios.get(
-          `https://oplata.info/api/purchases/unique-code/${code}?token=${response.data.token}`,
-        );
-        const options = payment.data.options;
-
-        userId = options[0].value;
-        amount = payment.data.amount_usd;
-        lang = payment.data.lang;
-      } catch (err) {
-        throw new Error('digiseller rejected');
-      }
+    } catch (error) {
+      console.log(error.data);
+      return res.status(200).json({ message: 'Failed' });
     }
-    if (!userId || !amount || !lang) {
-      await this.paymentService.successfulPayment(userId, amount, 'DIGISELLER');
+    if (userId && amount) {
+      await this.paymentService.successfulPayment(
+        userId,
+        amount,
+        'DIGISELLER',
+        inv,
+      );
       return res.redirect(
         `https://proxy.luxe/${lang.startsWith('ru') ? 'ru' : 'en'}/personal-account`,
       );
     }
+    return res.status(200).json({ message: 'Failed' });
   }
 
   @Get('admin/get-history/:userId')

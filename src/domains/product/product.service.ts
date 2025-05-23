@@ -426,48 +426,41 @@ export class ProductService {
     }
   }
   async prolongProxy(data: ProlongDto) {
-    console.log('data', data);
-    const order = await this.prisma.order.findUnique({
-      where: { id: data.orderId },
-    });
-    if (!order) {
-      throw new HttpException('Order not found', 404);
-    }
-    const quantity =
-      order.type !== 'resident'
-        ? (order.quantity as number)
-        : parseInt(order.tariff as string);
-
-    const price = await this.getCalcForOrder(data.type, quantity);
-
-    if (new Decimal(data.user.balance).lt(price)) {
-      throw new HttpException('Insufficient balance', 400);
-    }
-
-    const response = await this.proxySeller.post(`/prolong/make/${data.type}`, {
-      ids: data.id,
-      periodId: data.periodId,
-      paymentId: '1',
-    });
-    console.log('response', response.data);
-
-    if (response.data.status !== 'success') {
-      throw new HttpException('Invalid data', 400);
-    }
-
-    await this.prisma.user.update({
-      where: { id: order.userId },
-      data: {
-        balance: { decrement: price },
-      },
-    });
-
-    await this.prisma.order.update({
-      where: { id: data.orderId },
-      data: { end_date: await this.getNextMonthDate(order.end_date) },
-    });
-
-    return { status: 'success' };
+    // console.log('data', data);
+    // const order = await this.prisma.order.findUnique({
+    //   where: { id: data.orderId },
+    // });
+    // if (!order) {
+    //   throw new HttpException('Order not found', 404);
+    // }
+    // const quantity =
+    //   order.type !== 'resident'
+    //     ? (order.quantity as number)
+    //     : parseInt(order.tariff as string);
+    // const price = await this.getCalcForOrder(data.type, quantity);
+    // if (new Decimal(data.user.balance).lt(price)) {
+    //   throw new HttpException('Insufficient balance', 400);
+    // }
+    // const response = await this.proxySeller.post(`/prolong/make/${data.type}`, {
+    //   ids: data.id,
+    //   periodId: data.periodId,
+    //   paymentId: '1',
+    // });
+    // console.log('response', response.data);
+    // if (response.data.status !== 'success') {
+    //   throw new HttpException('Invalid data', 400);
+    // }
+    // await this.prisma.user.update({
+    //   where: { id: order.userId },
+    //   data: {
+    //     balance: { decrement: price },
+    //   },
+    // });
+    // await this.prisma.order.update({
+    //   where: { id: data.orderId },
+    //   data: { end_date: await this.getNextMonthDate(order.end_date) },
+    // });
+    // return { status: 'success' };
   }
   async modifyProxyResident(data: ModifyProxyResidentDto) {
     const response = await this.proxySeller.post('residentsubuser/list/add', {

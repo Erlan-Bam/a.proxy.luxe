@@ -426,6 +426,7 @@ export class ProductService {
     }
   }
   async prolongProxy(data: ProlongDto) {
+    console.log('data', data);
     const order = await this.prisma.order.findUnique({
       where: { id: data.orderId },
     });
@@ -448,6 +449,7 @@ export class ProductService {
       periodId: data.periodId,
       paymentId: '1',
     });
+    console.log('response', response.data);
 
     if (response.data.status !== 'success') {
       throw new HttpException('Invalid data', 400);

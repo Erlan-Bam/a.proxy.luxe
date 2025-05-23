@@ -107,7 +107,7 @@ export class PaymentService {
     });
 
     return await this.prisma.payment.create({
-      data: { userId: userId, price: amount, method: method },
+      data: { userId: userId, price: amount, method: method, inv: inv },
     });
   }
 

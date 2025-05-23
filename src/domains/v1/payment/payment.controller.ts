@@ -210,7 +210,11 @@ export class PaymentController {
       inv = payment.data.inv;
       lang = payment.data.lang;
     } catch (error) {
-      console.log(error.data);
+      if (axios.isAxiosError(error)) {
+        console.log('Axios error:', error.response?.data || error.message);
+      } else {
+        console.log('Unexpected error:', error);
+      }
       return res.status(200).json({ message: 'Failed' });
     }
     if (userId && amount) {

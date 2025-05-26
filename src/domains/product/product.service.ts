@@ -426,12 +426,21 @@ export class ProductService {
     }
   }
   async prolongProxy(data: ProlongDto) {
-    console.log('data', data);
     const order = await this.prisma.order.findUnique({
       where: { id: data.orderId },
     });
     if (!order) {
       throw new HttpException('Order not found', 404);
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: order.userId },
+    });
+    if (!user) {
+      throw new HttpException('User not found', 404);
+    }
+    const currentPrice = data.type === 'isp' ? 2.4 : 0.8;
+    if (new Decimal(user.balance).lt(currentPrice)) {
+      throw new HttpException('Insufficient balance', 400);
     }
     const quantity =
       order.type !== 'resident'
@@ -458,7 +467,11 @@ export class ProductService {
     });
     await this.prisma.order.update({
       where: { id: data.orderId },
-      data: { end_date: await this.getNextMonthDate(order.end_date) },
+      data: {
+        end_date: await this.getNextMonthDate(order.end_date),
+        orderId: response.data.orderId,
+        proxySellerId: response.data.orderId,
+      },
     });
     return { status: 'success' };
   }

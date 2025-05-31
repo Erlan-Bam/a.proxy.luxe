@@ -268,6 +268,14 @@ export class OrderService {
             orderId: orderId,
           },
         });
+        if (existingPK) {
+          await this.prisma.order.update({
+            where: { proxySellerId: package_key },
+            data: {
+              orderId: orderId,
+            },
+          });
+        }
       }
     } else {
       await this.prisma.order.update({

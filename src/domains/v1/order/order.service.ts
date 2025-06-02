@@ -259,6 +259,7 @@ export class OrderService {
       const existingPK = await this.prisma.order.findUnique({
         where: { proxySellerId: package_key },
       });
+      console.log('orderID', orderId);
       if (package_key) {
         await this.prisma.order.update({
           where: { id: order.id },
@@ -268,14 +269,6 @@ export class OrderService {
             orderId: orderId,
           },
         });
-        if (existingPK) {
-          await this.prisma.order.update({
-            where: { proxySellerId: package_key },
-            data: {
-              orderId: orderId,
-            },
-          });
-        }
       }
     } else {
       await this.prisma.order.update({

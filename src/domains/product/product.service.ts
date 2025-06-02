@@ -397,6 +397,7 @@ export class ProductService {
                 Number(resident.package_info.traffic_limit) + Number(tariff),
               ),
               is_active: true,
+              expired_at: await this.getOneMonthLaterFormatted(),
               package_key: resident.package_info.package_key,
             },
           );

@@ -251,6 +251,8 @@ export class OrderService {
     const placedOrder = await this.productService.placeOrder(orderInfo);
     const package_key = placedOrder.package_key,
       orderId = placedOrder.orderId;
+    console.log('orderId', orderId);
+    console.log('placedOrder', placedOrder);
     await this.prisma.user.update({
       where: { id: order.userId },
       data: { balance: { decrement: totalPrice } },
@@ -259,7 +261,6 @@ export class OrderService {
       const existingPK = await this.prisma.order.findUnique({
         where: { proxySellerId: package_key },
       });
-      console.log('orderID', orderId);
       if (package_key) {
         await this.prisma.order.update({
           where: { id: order.id },

@@ -433,6 +433,12 @@ export class ProductService {
     if (!order) {
       throw new HttpException('Order not found', 404);
     }
+    const oneHourMs = 60 * 60 * 1000;
+    const now = Date.now();
+    const updatedAtMs = new Date(order.updatedAt).getTime();
+    if (now - updatedAtMs < oneHourMs) {
+      throw new HttpException('You can only prolong once per hour', 400);
+    }
     const user = await this.prisma.user.findUnique({
       where: { id: order.userId },
     });

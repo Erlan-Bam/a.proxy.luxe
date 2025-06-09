@@ -448,7 +448,7 @@ export class ProductService {
       console.log('wow did not work because of user');
       throw new HttpException('User not found', 404);
     }
-    const currentPrice = order.totalPrice;
+    const currentPrice = data.type === 'isp' ? 2.4 : 0.8;
     if (new Decimal(user.balance).lt(currentPrice)) {
       console.log('wow did not work because of user');
       throw new HttpException('Insufficient balance', 400);

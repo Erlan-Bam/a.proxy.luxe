@@ -445,16 +445,8 @@ export class ProductService {
     if (!user) {
       throw new HttpException('User not found', 404);
     }
-    const currentPrice = data.type === 'isp' ? 2.4 : 0.8;
+    const currentPrice = order.totalPrice;
     if (new Decimal(user.balance).lt(currentPrice)) {
-      throw new HttpException('Insufficient balance', 400);
-    }
-    const quantity =
-      order.type !== 'resident'
-        ? (order.quantity as number)
-        : parseInt(order.tariff as string);
-    const price = await this.getCalcForOrder(data.type, quantity);
-    if (new Decimal(data.user.balance).lt(price)) {
       throw new HttpException('Insufficient balance', 400);
     }
     const response = await this.proxySeller.post(`/prolong/make/${data.type}`, {
@@ -469,7 +461,7 @@ export class ProductService {
     await this.prisma.user.update({
       where: { id: order.userId },
       data: {
-        balance: { decrement: price },
+        balance: { decrement: currentPrice },
       },
     });
     await this.prisma.order.update({

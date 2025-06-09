@@ -431,22 +431,26 @@ export class ProductService {
       where: { id: data.orderId },
     });
     if (!order) {
+      console.log('wow did not find order', data.orderId);
       throw new HttpException('Order not found', 404);
     }
     const oneHourMs = 60 * 60 * 1000;
     const now = Date.now();
     const updatedAtMs = new Date(order.updatedAt).getTime();
     if (now - updatedAtMs < oneHourMs) {
+      console.log('wow did not work because of time');
       throw new HttpException('You can only prolong once per hour', 400);
     }
     const user = await this.prisma.user.findUnique({
       where: { id: order.userId },
     });
     if (!user) {
+      console.log('wow did not work because of user');
       throw new HttpException('User not found', 404);
     }
     const currentPrice = order.totalPrice;
     if (new Decimal(user.balance).lt(currentPrice)) {
+      console.log('wow did not work because of user');
       throw new HttpException('Insufficient balance', 400);
     }
     const response = await this.proxySeller.post(`/prolong/make/${data.type}`, {

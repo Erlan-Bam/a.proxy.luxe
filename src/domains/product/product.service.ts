@@ -476,6 +476,23 @@ export class ProductService {
         proxySellerId: response.data.orderId,
       },
     });
+    await this.prisma.order.create({
+      data: {
+        type: order.type,
+        userId: order.userId,
+        country: order.country,
+        quantity: order.quantity,
+        periodDays: order.periodDays,
+        proxyType: order.proxyType,
+        status: 'PAID',
+        goal: order.goal,
+        tariff: order.tariff,
+        totalPrice: currentPrice,
+        end_date: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000,
+        ).toLocaleDateString('ru-RU'),
+      },
+    });
     return { status: 'success' };
   }
   async modifyProxyResident(data: ModifyProxyResidentDto) {

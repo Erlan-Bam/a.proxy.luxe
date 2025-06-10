@@ -488,6 +488,7 @@ export class ProductService {
         goal: order.goal,
         tariff: order.tariff,
         totalPrice: currentPrice,
+        orderId: (response.data.listBaseOrderNumbers as string[]).join(', '),
         end_date: new Date(
           Date.now() + 30 * 24 * 60 * 60 * 1000,
         ).toLocaleDateString('ru-RU'),

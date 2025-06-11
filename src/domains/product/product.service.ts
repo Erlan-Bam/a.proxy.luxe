@@ -476,8 +476,6 @@ export class ProductService {
         proxySellerId: response.data.orderId,
       },
     });
-    const orderId =
-      response.data.listBaseOrderNumbers[0] || response.data.orderId;
     await this.prisma.order.create({
       data: {
         type: order.type,
@@ -490,7 +488,7 @@ export class ProductService {
         goal: order.goal,
         tariff: order.tariff,
         totalPrice: currentPrice,
-        orderId: orderId,
+        orderId: response.data.orderId,
         end_date: new Date(
           Date.now() + 30 * 24 * 60 * 60 * 1000,
         ).toLocaleDateString('ru-RU'),

@@ -127,7 +127,7 @@ export class OrderService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
         skip,
         take: limit,
       }),
@@ -138,7 +138,7 @@ export class OrderService {
 
     const [payments, totalPayments] = await this.prisma.$transaction([
       this.prisma.payment.findMany({
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
         include: {
           user: {
             select: {

@@ -279,6 +279,7 @@ export class ProductService {
       const proxySellerMap = new Map(
         orders.map((order) => [order.proxySellerId, order.id]),
       );
+      console.log('lol', proxySellerMap, userId);
 
       if (type !== 'resident') {
         const response: AxiosResponse<ActiveProxy> = await this.proxySeller.get(
@@ -286,11 +287,13 @@ export class ProductService {
         );
 
         if (response.data.status !== 'success') {
+          console.log('Invalid response from proxy provider:', response.data);
           return {
             status: 'error',
             message: 'Invalid response from proxy provider',
           };
         }
+        console.log(response.data);
 
         const filteredItems =
           response.data.data.items
@@ -482,6 +485,7 @@ export class ProductService {
         tariff: order.tariff,
         totalPrice: currentPrice,
         orderId: `${response.data.data.orderId}`,
+        proxySellerId: `${response.data.data.orderId}`,
         end_date: new Date(
           Date.now() + 30 * 24 * 60 * 60 * 1000,
         ).toLocaleDateString('ru-RU'),

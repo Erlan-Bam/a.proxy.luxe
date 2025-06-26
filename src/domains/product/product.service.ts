@@ -279,7 +279,6 @@ export class ProductService {
       const proxySellerMap = new Map(
         orders.map((order) => [order.proxySellerId, order.id]),
       );
-      console.log('lol', proxySellerMap, userId);
 
       if (type !== 'resident') {
         const response: AxiosResponse<ActiveProxy> = await this.proxySeller.get(
@@ -466,8 +465,6 @@ export class ProductService {
       where: { id: data.orderId },
       data: {
         end_date: await this.getNextMonthDate(order.end_date),
-        orderId: response.data.orderId,
-        proxySellerId: response.data.orderId,
       },
     });
     await this.prisma.order.create({

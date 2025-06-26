@@ -287,13 +287,11 @@ export class ProductService {
         );
 
         if (response.data.status !== 'success') {
-          console.log('Invalid response from proxy provider:', response.data);
           return {
             status: 'error',
             message: 'Invalid response from proxy provider',
           };
         }
-        console.log(response.data);
 
         const filteredItems =
           response.data.data.items

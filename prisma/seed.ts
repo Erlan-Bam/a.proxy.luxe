@@ -6,10 +6,10 @@ const prisma = new PrismaClient();
 async function main() {
   await prisma.order.updateMany({
     where: {
-      id: 'd2bb3a97-f1f1-4bbd-a8fb-595459a7156d',
+      id: '8438a010-ce18-4ce1-bba6-f05764070fa5',
     },
     data: {
-      proxySellerId: `3594638`,
+      proxySellerId: `3594637`,
     },
   });
 }

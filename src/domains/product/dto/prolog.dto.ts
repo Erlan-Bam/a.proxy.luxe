@@ -1,6 +1,6 @@
 import { Proxy, User } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsUUID } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class ProlongDto {
   @IsUUID()
@@ -9,8 +9,7 @@ export class ProlongDto {
   @IsEnum(Proxy)
   type: Proxy;
 
-  @IsInt()
-  @Type(() => Number)
+  @IsString()
   id: number;
 
   @IsEnum({

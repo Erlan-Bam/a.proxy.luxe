@@ -69,62 +69,507 @@ export class ProductService {
       };
     }
 
-    const isp = reference.data.isp;
-    const ipv6 = reference.data.ipv6;
-    const resident = reference.data.resident;
-    const amounts = [
-      {
-        id: '1',
-        text: '1 шт',
-      },
-      {
-        id: '10',
-        text: '10 шт',
-      },
-      {
-        id: '20',
-        text: '20 шт',
-      },
-      {
-        id: '30',
-        text: '30 шт',
-      },
-      {
-        id: '50',
-        text: '50 шт',
-      },
-      {
-        id: '100',
-        text: '100 шт',
-      },
-    ];
-
     return {
       status: 'success',
       isp: {
-        country: isp?.country,
-        period: isp?.period,
-        targets: isp?.target?.map(({ sectionId, name }) => ({
-          sectionId,
-          name,
-        })),
+        country: [
+          {
+            id: 3758,
+            name: 'USA',
+            alpha3: 'USA',
+          },
+          {
+            id: 4479,
+            name: 'Poland',
+            alpha3: 'POL',
+          },
+          {
+            id: 4480,
+            name: 'Netherlands',
+            alpha3: 'NLD',
+          },
+          {
+            id: 5236,
+            name: 'Brazil',
+            alpha3: 'BRA',
+          },
+          {
+            id: 5389,
+            name: 'Latvia',
+            alpha3: 'LVA',
+          },
+          {
+            id: 6269,
+            name: 'France',
+            alpha3: 'FRA',
+          },
+          {
+            id: 6271,
+            name: 'Romania',
+            alpha3: 'ROU',
+          },
+          {
+            id: 6272,
+            name: 'Canada',
+            alpha3: 'CAN',
+          },
+          {
+            id: 6911,
+            name: 'Norway',
+            alpha3: 'NOR',
+          },
+          {
+            id: 6963,
+            name: 'Austria',
+            alpha3: 'AUT',
+          },
+          {
+            id: 7738,
+            name: 'England',
+            alpha3: 'GBR',
+          },
+          {
+            id: 7894,
+            name: 'Ukraine',
+            alpha3: 'UKR',
+          },
+          {
+            id: 7952,
+            name: 'Turkey',
+            alpha3: 'TUR',
+          },
+          {
+            id: 7953,
+            name: 'Japan',
+            alpha3: 'JPN',
+          },
+          {
+            id: 7954,
+            name: 'Israel',
+            alpha3: 'ISR',
+          },
+          {
+            id: 8658,
+            name: 'Taiwan',
+            alpha3: 'TWN',
+          },
+          {
+            id: 8659,
+            name: 'South Korea',
+            alpha3: 'KOR',
+          },
+          {
+            id: 9767,
+            name: 'Germany',
+            alpha3: 'DEU',
+          },
+          {
+            id: 10257,
+            name: 'Singapore',
+            alpha3: 'SGP',
+          },
+          {
+            id: 11674,
+            name: 'Hong Kong',
+            alpha3: 'HKN',
+          },
+          {
+            id: 12245,
+            name: 'Thailand',
+            alpha3: 'THA',
+          },
+          {
+            id: 15701,
+            name: 'Italy',
+            alpha3: 'ITA',
+          },
+        ],
+        period: [
+          {
+            id: '1w',
+            name: '1 week',
+          },
+          {
+            id: '2w',
+            name: '2 weeks',
+          },
+          {
+            id: '1m',
+            name: '1 month',
+          },
+          {
+            id: '2m',
+            name: '2 months',
+          },
+          {
+            id: '3m',
+            name: '3 months',
+          },
+          {
+            id: '6m',
+            name: '6 months',
+          },
+          {
+            id: '9m',
+            name: '9 months',
+          },
+          {
+            id: '12m',
+            name: '12 months',
+          },
+        ],
+        targets: [
+          {
+            sectionId: 21,
+            name: 'Gaming',
+          },
+          {
+            sectionId: 13,
+            name: 'Social media',
+          },
+          {
+            sectionId: 40,
+            name: 'For Game bots',
+          },
+          {
+            sectionId: 79,
+            name: 'Online Marketplaces',
+          },
+          {
+            sectionId: 39,
+            name: 'For Web scraping',
+          },
+          {
+            sectionId: 8,
+            name: 'Other purposes',
+          },
+          {
+            sectionId: 78,
+            name: 'Sneaker websites',
+          },
+          {
+            sectionId: 86,
+            name: 'For Sneaker bots',
+          },
+          {
+            sectionId: 32,
+            name: 'For Instagram',
+          },
+          {
+            sectionId: 41,
+            name: 'For other program',
+          },
+          {
+            sectionId: 7,
+            name: 'Web Scraping',
+          },
+        ],
       },
       ipv6: {
-        country: ipv6?.country,
-        period: ipv6?.period,
-        targets: ipv6?.target?.map(({ sectionId, name }) => ({
-          sectionId,
-          name,
-        })),
+        country: [
+          {
+            id: 610,
+            name: 'Proxy of Germany',
+            alpha3: 'DEU',
+          },
+          {
+            id: 611,
+            name: 'Proxy of France',
+            alpha3: 'FRA',
+          },
+          {
+            id: 612,
+            name: 'Proxy of Netherlands',
+            alpha3: 'NLD',
+          },
+          {
+            id: 613,
+            name: 'Proxy of Canada',
+            alpha3: 'CAN',
+          },
+          {
+            id: 785,
+            name: 'Proxy of US',
+            alpha3: 'USA',
+          },
+          {
+            id: 1263,
+            name: 'Proxy of England',
+            alpha3: 'GBR',
+          },
+          {
+            id: 1292,
+            name: 'Proxy of Australia',
+            alpha3: 'AUS',
+          },
+          {
+            id: 2060,
+            name: 'Proxy of Spain',
+            alpha3: 'ESP',
+          },
+          {
+            id: 3910,
+            name: 'Proxy of Czech',
+            alpha3: 'CZE',
+          },
+          {
+            id: 4432,
+            name: 'Proxy of Turkey',
+            alpha3: 'TUR',
+          },
+          {
+            id: 4433,
+            name: 'Proxy of Romania',
+            alpha3: 'ROU',
+          },
+          {
+            id: 4477,
+            name: 'Proxy of Singapore',
+            alpha3: 'SGP',
+          },
+          {
+            id: 4546,
+            name: 'Proxy of Japan',
+            alpha3: 'JPN',
+          },
+          {
+            id: 4650,
+            name: 'Proxy of Bulgaria',
+            alpha3: 'BGR',
+          },
+          {
+            id: 8145,
+            name: 'Proxy of Portugal',
+            alpha3: 'PRT',
+          },
+          {
+            id: 20554,
+            name: 'Proxy of Brazil',
+            alpha3: 'BRA',
+          },
+          {
+            id: 20562,
+            name: 'Proxy of India',
+            alpha3: 'IND',
+          },
+        ],
+        period: [
+          {
+            id: '1w',
+            name: '1 week',
+          },
+          {
+            id: '2w',
+            name: '2 weeks',
+          },
+          {
+            id: '1m',
+            name: '1 month',
+          },
+          {
+            id: '2m',
+            name: '2 months',
+          },
+          {
+            id: '3m',
+            name: '3 months',
+          },
+          {
+            id: '6m',
+            name: '6 months',
+          },
+          {
+            id: '9m',
+            name: '9 months',
+          },
+          {
+            id: '12m',
+            name: '12 months',
+          },
+        ],
+        targets: [
+          {
+            sectionId: 32,
+            name: 'For Instagram',
+          },
+          {
+            sectionId: 8,
+            name: 'Other purposes',
+          },
+          {
+            sectionId: 13,
+            name: 'Social media',
+          },
+          {
+            sectionId: 39,
+            name: 'For Web scraping',
+          },
+          {
+            sectionId: 7,
+            name: 'Web Scraping',
+          },
+          {
+            sectionId: 79,
+            name: 'Online Marketplaces',
+          },
+        ],
       },
       resident: {
-        tariffs: resident?.tarifs,
-        targets: resident?.target?.map(({ sectionId, name }) => ({
-          sectionId,
-          name,
-        })),
+        tariffs: [
+          {
+            id: 6928,
+            name: '500 Mb',
+            personal: false,
+          },
+          {
+            id: 25208,
+            name: '1 Gb',
+            personal: true,
+          },
+          {
+            id: 9866,
+            name: '1 Gb',
+            personal: false,
+          },
+          {
+            id: 25209,
+            name: '3 Gb',
+            personal: true,
+          },
+          {
+            id: 11403,
+            name: '3 Gb',
+            personal: false,
+          },
+          {
+            id: 25210,
+            name: '10 Gb',
+            personal: true,
+          },
+          {
+            id: 25211,
+            name: '25 Gb',
+            personal: true,
+          },
+          {
+            id: 11404,
+            name: '10 Gb',
+            personal: false,
+          },
+          {
+            id: 9982,
+            name: '25 Gb',
+            personal: false,
+          },
+          {
+            id: 6938,
+            name: '50 Gb',
+            personal: false,
+          },
+          {
+            id: 25212,
+            name: '50 Gb',
+            personal: true,
+          },
+          {
+            id: 6937,
+            name: '100 Gb',
+            personal: false,
+          },
+          {
+            id: 17721,
+            name: '100 Gb',
+            personal: true,
+          },
+          {
+            id: 25213,
+            name: '200 Gb',
+            personal: true,
+          },
+          {
+            id: 11407,
+            name: '200 Gb',
+            personal: false,
+          },
+          {
+            id: 6936,
+            name: '300 Gb',
+            personal: false,
+          },
+          {
+            id: 25214,
+            name: '300 Gb',
+            personal: true,
+          },
+          {
+            id: 25215,
+            name: '500 Gb',
+            personal: true,
+          },
+          {
+            id: 11405,
+            name: '500 Gb',
+            personal: false,
+          },
+          {
+            id: 25216,
+            name: '750 Gb',
+            personal: true,
+          },
+          {
+            id: 11406,
+            name: '750 Gb',
+            personal: false,
+          },
+          {
+            id: 6935,
+            name: '1000 Gb',
+            personal: false,
+          },
+          {
+            id: 25217,
+            name: '1000 Gb',
+            personal: true,
+          },
+          {
+            id: 25218,
+            name: '3000 Gb',
+            personal: true,
+          },
+          {
+            id: 11413,
+            name: '3000 Gb',
+            personal: false,
+          },
+        ],
+        targets: [],
       },
-      amounts: amounts,
+      amounts: [
+        {
+          id: '1',
+          text: '1 шт',
+        },
+        {
+          id: '10',
+          text: '10 шт',
+        },
+        {
+          id: '20',
+          text: '20 шт',
+        },
+        {
+          id: '30',
+          text: '30 шт',
+        },
+        {
+          id: '50',
+          text: '50 шт',
+        },
+        {
+          id: '100',
+          text: '100 шт',
+        },
+      ],
     };
   }
 

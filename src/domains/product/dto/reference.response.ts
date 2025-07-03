@@ -22,7 +22,7 @@ export interface TargetItem {
 }
 
 export interface Target {
-  sectionId: string;
+  sectionId: number;
   name: string;
 }
 

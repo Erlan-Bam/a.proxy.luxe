@@ -886,9 +886,18 @@ export class ProductService {
       console.log('wow did not work because of user');
       throw new HttpException('User not found', 404);
     }
-    const currentPrice = data.type === 'isp' ? 2.4 : order.totalPrice;
+    const idsArray = data.id
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const count = idsArray.length;
+
+    const currentPrice = count * (data.type === 'isp' ? 2.4 : 0.08);
     if (new Decimal(user.balance).lt(currentPrice)) {
-      console.log('wow did not work because of user');
+      console.log(
+        'wow did not work because of user insufficient balance',
+        user,
+      );
       throw new HttpException('Insufficient balance', 400);
     }
     const response = await this.proxySeller.post(`/prolong/make/${data.type}`, {

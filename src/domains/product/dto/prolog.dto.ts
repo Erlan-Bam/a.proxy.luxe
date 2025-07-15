@@ -10,7 +10,7 @@ export class ProlongDto {
   type: Proxy;
 
   @IsString()
-  id: number;
+  id: string;
 
   @IsEnum({
     '1m': '1m',

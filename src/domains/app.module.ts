@@ -9,6 +9,7 @@ import { ServicesModule } from './v1/services/services.module';
 import { PaymentModule } from './v1/payment/payment.module';
 import { SharedModule } from './v1/shared/shared.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ServicesModule,
     PaymentModule,
     SharedModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

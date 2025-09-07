@@ -253,9 +253,14 @@ export class OrderService {
       orderId = placedOrder.orderId;
     console.log('orderId', orderId);
     console.log('placedOrder', placedOrder);
-    await this.prisma.user.update({
-      where: { id: order.userId },
-      data: { balance: { decrement: totalPrice } },
+    await this.prisma.user.updateMany({
+      where: {
+        id: order.userId,
+        balance: { gte: totalPrice },
+      },
+      data: {
+        balance: { decrement: totalPrice },
+      },
     });
     if (order.type === 'resident') {
       const existingPK = await this.prisma.order.findUnique({

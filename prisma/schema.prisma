@@ -33,6 +33,7 @@ enum PaymentStatus {
   PENDING
   PAID
   CANCELED
+  PROCESSING
 }
 
 enum UserType {

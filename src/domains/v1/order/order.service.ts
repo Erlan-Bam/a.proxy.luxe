@@ -177,139 +177,174 @@ export class OrderService {
   }
 
   async finishOrder(paymentDto: FinishOrderDto, lang: string = 'en') {
-    const order = await this.prisma.order.findUnique({
-      where: { id: paymentDto.orderId },
-    });
+    try {
+      return await this.prisma.$transaction(
+        async (prisma) => {
+          const updatedOrder = await prisma.order.updateMany({
+            where: {
+              id: paymentDto.orderId,
+              status: PaymentStatus.PENDING,
+            },
+            data: {
+              status: PaymentStatus.PROCESSING,
+              updatedAt: new Date(),
+            },
+          });
 
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
+          if (updatedOrder.count === 0) {
+            throw new BadRequestException(
+              'Order not found or already processed',
+            );
+          }
 
-    if (order.status !== PaymentStatus.PENDING) {
-      throw new BadRequestException('Order already processed');
-    }
+          const order = await prisma.order.findUnique({
+            where: { id: paymentDto.orderId },
+          });
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: order.userId },
-      include: { referredBy: true },
-    });
+          if (!order) {
+            throw new NotFoundException('Order not found');
+          }
 
-    if (!user) {
-      throw new HttpException('User not found', 404);
-    }
+          const user = await prisma.user.findUnique({
+            where: { id: order.userId },
+            include: { referredBy: true },
+          });
 
-    let totalPrice = order.totalPrice;
-    if (paymentDto.promocode) {
-      const { isValidCoupon, coupon } = await this.checkPromocode(
-        paymentDto.promocode,
-      );
-      if (!isValidCoupon) {
-        throw new HttpException('Invalid promocode', 400);
-      }
-      if (isValidCoupon && coupon) {
-        totalPrice = new Decimal(totalPrice)
-          .mul(Decimal.sub(100, coupon.discount))
-          .div(100);
-      }
-    }
+          if (!user) {
+            throw new HttpException('User not found', 404);
+          }
 
-    if (new Decimal(user.balance).lt(totalPrice)) {
-      throw new HttpException('Insufficient balance', 400);
-    }
+          let totalPrice = order.totalPrice;
+          if (paymentDto.promocode) {
+            const { isValidCoupon, coupon } = await this.checkPromocode(
+              paymentDto.promocode,
+            );
+            if (!isValidCoupon) {
+              throw new HttpException('Invalid promocode', 400);
+            }
+            if (isValidCoupon && coupon) {
+              totalPrice = new Decimal(totalPrice)
+                .mul(Decimal.sub(100, coupon.discount))
+                .div(100);
+            }
+          }
 
-    const reference = await this.productService.getProductReferenceByType(
-      order.type,
-    );
+          if (new Decimal(user.balance).lt(totalPrice)) {
+            throw new HttpException('Insufficient balance', 400);
+          }
 
-    if (reference.status !== 'success') {
-      throw new HttpException(
-        reference.message || 'Invalid reference data',
-        400,
-      );
-    }
-    const orderInfo: OrderInfo = {
-      type: order.type,
-      orderId: order.id,
-      paymentId: 1,
-      tariff: order.tariff ? order.tariff : undefined,
-      countryId: reference.country?.find(
-        (country) => order.country && country.name.endsWith(order.country),
-      )?.id,
-      tariffId: reference.tariffs?.find(
-        (tariff) =>
-          order.tariff &&
-          tariff.name.toLowerCase() === order.tariff.toLowerCase() &&
-          tariff.personal,
-      )?.id,
-      customTargetName: order.goal,
-      periodId: order.periodDays ? order.periodDays : undefined,
-      quantity: order.quantity ? order.quantity : undefined,
-      protocol: order.proxyType ? order.proxyType : undefined,
-      userId: order.userId,
-    };
+          const reference = await this.productService.getProductReferenceByType(
+            order.type,
+          );
 
-    const placedOrder = await this.productService.placeOrder(orderInfo);
-    const package_key = placedOrder.package_key,
-      orderId = placedOrder.orderId;
-    console.log('orderId', orderId);
-    console.log('placedOrder', placedOrder);
-    await this.prisma.user.updateMany({
-      where: {
-        id: order.userId,
-        balance: { gte: totalPrice },
-      },
-      data: {
-        balance: { decrement: totalPrice },
-      },
-    });
-    if (order.type === 'resident') {
-      const existingPK = await this.prisma.order.findUnique({
-        where: { proxySellerId: package_key },
-      });
-      if (package_key) {
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: {
-            proxySellerId: existingPK ? null : package_key,
-            status: 'PAID',
-            orderId: orderId,
-          },
-        });
-      }
-    } else {
-      await this.prisma.order.update({
-        where: { id: order.id },
-        data: {
-          proxySellerId: orderId,
-          status: 'PAID',
-          orderId: orderId,
+          if (reference.status !== 'success') {
+            throw new HttpException(
+              reference.message || 'Invalid reference data',
+              400,
+            );
+          }
+
+          const orderInfo: OrderInfo = {
+            type: order.type,
+            orderId: order.id,
+            paymentId: 1,
+            tariff: order.tariff ? order.tariff : undefined,
+            countryId: reference.country?.find(
+              (country) =>
+                order.country && country.name.endsWith(order.country),
+            )?.id,
+            tariffId: reference.tariffs?.find(
+              (tariff) =>
+                order.tariff &&
+                tariff.name.toLowerCase() === order.tariff.toLowerCase() &&
+                tariff.personal,
+            )?.id,
+            customTargetName: order.goal,
+            periodId: order.periodDays ? order.periodDays : undefined,
+            quantity: order.quantity ? order.quantity : undefined,
+            protocol: order.proxyType ? order.proxyType : undefined,
+            userId: order.userId,
+          };
+
+          const placedOrder = await this.productService.placeOrder(orderInfo);
+          const package_key = placedOrder.package_key,
+            orderId = placedOrder.orderId;
+
+          console.log('orderId', orderId);
+          console.log('placedOrder', placedOrder);
+
+          // Update user balance using the transaction prisma instance
+          await prisma.user.updateMany({
+            where: {
+              id: order.userId,
+              balance: { gte: totalPrice },
+            },
+            data: {
+              balance: { decrement: totalPrice },
+            },
+          });
+
+          if (order.type === 'resident') {
+            const existingPK = await prisma.order.findUnique({
+              where: { proxySellerId: package_key },
+            });
+            if (package_key) {
+              await prisma.order.update({
+                where: { id: order.id },
+                data: {
+                  proxySellerId: existingPK ? null : package_key,
+                  status: 'PAID',
+                  orderId: orderId,
+                },
+              });
+            }
+          } else {
+            await prisma.order.update({
+              where: { id: order.id },
+              data: {
+                proxySellerId: orderId,
+                status: 'PAID',
+                orderId: orderId,
+              },
+            });
+          }
+
+          if (paymentDto.promocode) {
+            await prisma.coupon.update({
+              where: { code: paymentDto.promocode },
+              data: { limit: { decrement: 1 } },
+            });
+          }
+
+          if (user.referredBy) {
+            const partnerId = user.referredBy.partnerId;
+
+            await prisma.partnerTransaction.create({
+              data: {
+                partnerId,
+                amount: new Decimal(totalPrice).mul(0.15).toNumber(),
+              },
+            });
+          }
+
+          await this.userService.sendProxyEmail(user.email, lang);
+
+          const response = {
+            message: 'Successfully finished order',
+            type: order.type,
+            orderId: order.id,
+          };
+
+          return response;
         },
-      });
-    }
-    if (paymentDto.promocode) {
-      await this.prisma.coupon.update({
-        where: { code: paymentDto.promocode },
-        data: { limit: { decrement: 1 } },
-      });
-    }
-    if (user.referredBy) {
-      const partnerId = user.referredBy.partnerId;
-
-      await this.prisma.partnerTransaction.create({
-        data: {
-          partnerId,
-          amount: new Decimal(totalPrice).mul(0.15).toNumber(),
+        {
+          timeout: 60000,
+          isolationLevel: 'Serializable',
         },
-      });
+      );
+    } finally {
+      console.log('Finished processing order' + paymentDto.orderId);
     }
-
-    await this.userService.sendProxyEmail(user.email, lang);
-
-    return {
-      message: 'Successfully finished order',
-      type: order.type,
-      orderId: order.id,
-    };
   }
 
   async findOrdersByUserId(userId: string) {

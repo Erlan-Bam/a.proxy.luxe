@@ -93,6 +93,8 @@ model Article {
   content        String   @db.Text
   lang           Language
   images         String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt @default(now())
 }
 
 model Order {

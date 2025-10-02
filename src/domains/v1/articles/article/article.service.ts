@@ -3,18 +3,29 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { PrismaService } from '../../shared/prisma.service';
 import { Article, Language } from '@prisma/client';
+import slugify from 'slugify';
 
 @Injectable()
 export class ArticleService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private generateSlug(title: string): string {
+    return slugify(title, {
+      lower: true,
+      strict: true,
+      remove: /[*+~.()"!:@]/g,
+    });
+  }
+
   async create(createArticleDto: CreateArticleDto) {
+    const slug = this.generateSlug(createArticleDto.title);
     return await this.prisma.article.create({
       data: {
         title: createArticleDto.title,
         content: createArticleDto.content,
         images: createArticleDto.images,
         lang: createArticleDto.lang,
+        slug,
       },
     });
   }
@@ -28,9 +39,15 @@ export class ArticleService {
     });
   }
 
-  async findOne(id: string) {
-    const article = await this.prisma.article.findUnique({
-      where: { id },
+  async findOne(identifier: string) {
+    // Check if identifier is a UUID (for backward compatibility with admin panel)
+    const isUUID =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        identifier,
+      );
+
+    const article = await this.prisma.article.findFirst({
+      where: isUUID ? { id: identifier } : { slug: identifier },
     });
 
     if (!article) {
@@ -45,14 +62,22 @@ export class ArticleService {
     if (!article) {
       throw new HttpException('Article not found', 404);
     }
+
+    const updateData: any = {
+      title: updateArticleDto.title ?? article.title,
+      content: updateArticleDto.content ?? article.content,
+      images: updateArticleDto.images ?? article.images,
+      lang: updateArticleDto.lang ?? article.lang,
+    };
+
+    // If title is being updated, regenerate slug
+    if (updateArticleDto.title && updateArticleDto.title !== article.title) {
+      updateData.slug = this.generateSlug(updateArticleDto.title);
+    }
+
     return this.prisma.article.update({
       where: { id },
-      data: {
-        title: updateArticleDto.title ?? article.title,
-        content: updateArticleDto.content ?? article.content,
-        images: updateArticleDto.images ?? article.images,
-        lang: updateArticleDto.lang ?? article.lang,
-      },
+      data: updateData,
     });
   }
 

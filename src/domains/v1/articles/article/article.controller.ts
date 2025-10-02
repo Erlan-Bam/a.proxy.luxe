@@ -10,9 +10,11 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  UploadedFile,
   ParseEnumPipe,
+  BadRequestException,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { ArticleService } from './article.service';
@@ -61,6 +63,46 @@ export class ArticleController {
     const pageNumber = parseInt(page as any, 10);
     const limitNumber = parseInt(limit as any, 10);
     return this.articleService.findAll(pageNumber, limitNumber, lang);
+  }
+
+  @Post('upload-image')
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        // Allow only image files
+        if (file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Only image files are allowed'), false);
+        }
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+      },
+    }),
+  )
+  uploadImage(@UploadedFile() file: any) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    
+    const imageUrl = `${baseUrl}/uploads/${file.filename}`;
+    return {
+      imageUrl,
+      message: 'Image uploaded successfully',
+      filename: file.filename,
+      originalName: file.originalname,
+      size: file.size,
+    };
   }
 
   @Get(':id')

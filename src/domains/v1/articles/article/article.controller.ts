@@ -94,7 +94,7 @@ export class ArticleController {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-    
+
     const imageUrl = `${baseUrl}/uploads/${file.filename}`;
     return {
       imageUrl,

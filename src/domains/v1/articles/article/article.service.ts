@@ -47,11 +47,7 @@ export class ArticleService {
       take: limit,
       where: { lang: lang },
       include: {
-        tags: {
-          include: {
-            tag: true,
-          },
-        },
+        tags: true,
       },
     });
   }
@@ -66,11 +62,7 @@ export class ArticleService {
     const article = await this.prisma.article.findFirst({
       where: isUUID ? { id: identifier } : { slug: identifier },
       include: {
-        tags: {
-          include: {
-            tag: true,
-          },
-        },
+        tags: true,
       },
     });
 

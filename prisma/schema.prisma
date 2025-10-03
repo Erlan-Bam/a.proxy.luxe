@@ -97,26 +97,16 @@ model Article {
   slug           String   @default("")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt @default(now())
-  tags           ArticleTag[]
+  tags           Tag[]
 }
 
 model Tag {
-  id        String       @id @default(uuid())
-  name      String       @unique
-  color     String?      @default("#3B82F6")
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  articles  ArticleTag[]
-}
-
-model ArticleTag {
-  id        String  @id @default(uuid())
-  articleId String
-  tagId     String
-  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@unique([articleId, tagId])
+  id        String    @id @default(uuid())
+  name      String    @unique
+  color     String?   @default("#3B82F6")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  articles  Article[]
 }
 
 model Order {

@@ -144,4 +144,48 @@ export class ArticleController {
   remove(@Param('id') id: string) {
     return this.articleService.remove(id);
   }
+
+  // === Теги ===
+  @Post('tags')
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
+  createTag(@Body() createTagDto: { name: string }) {
+    return this.articleService.createTag(createTagDto.name);
+  }
+
+  @Get('tags')
+  getAllTags() {
+    return this.articleService.getAllTags();
+  }
+
+  @Delete('tags/:id')
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
+  deleteTag(@Param('id') id: string) {
+    return this.articleService.deleteTag(id);
+  }
+
+  @Patch(':id/tags')
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
+  updateArticleTags(
+    @Param('id') id: string,
+    @Body() updateTagsDto: { tags: string[] },
+  ) {
+    return this.articleService.updateArticleTags(id, updateTagsDto.tags);
+  }
+
+  @Get('by-tag/:tagName')
+  getArticlesByTag(
+    @Param('tagName') tagName: string,
+    @Query('lang', new ParseEnumPipe(Language)) lang: Language,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    const pageNumber = parseInt(page as any, 10);
+    const limitNumber = parseInt(limit as any, 10);
+    return this.articleService.getArticlesByTag(
+      tagName,
+      pageNumber,
+      limitNumber,
+      lang,
+    );
+  }
 }

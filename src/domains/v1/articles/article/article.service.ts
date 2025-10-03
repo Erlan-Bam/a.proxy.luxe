@@ -46,8 +46,26 @@ export class ArticleService {
       skip,
       take: limit,
       where: { lang: lang },
-      include: {
-        tags: true,
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        lang: true,
+        images: true,
+        mainImage: true, // ГЛАВНОЕ ИЗОБРАЖЕНИЕ
+        slug: true,
+        createdAt: true,
+        updatedAt: true,
+        tags: {
+          // ТЕГИ
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -62,8 +80,26 @@ export class ArticleService {
 
     const article = await this.prisma.article.findFirst({
       where: isUUID ? { id: identifier } : { slug: identifier },
-      include: {
-        tags: true,
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        lang: true,
+        images: true,
+        mainImage: true, // ГЛАВНОЕ ИЗОБРАЖЕНИЕ
+        slug: true,
+        createdAt: true,
+        updatedAt: true,
+        tags: {
+          // ТЕГИ
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     });
 
@@ -194,8 +230,26 @@ export class ArticleService {
           },
         },
       },
-      include: {
-        tags: true,
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        lang: true,
+        images: true,
+        mainImage: true, // ГЛАВНОЕ ИЗОБРАЖЕНИЕ
+        slug: true,
+        createdAt: true,
+        updatedAt: true,
+        tags: {
+          // ТЕГИ
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
       skip,
       take: limit,

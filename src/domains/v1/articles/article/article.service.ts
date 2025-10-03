@@ -19,7 +19,9 @@ export class ArticleService {
 
   async create(createArticleDto: CreateArticleDto) {
     const slug = this.generateSlug(createArticleDto.title);
-    return await this.prisma.article.create({
+
+    // Create article first
+    const article = await this.prisma.article.create({
       data: {
         title: createArticleDto.title,
         content: createArticleDto.content,
@@ -29,6 +31,13 @@ export class ArticleService {
         slug,
       },
     });
+
+    // Handle tags if provided
+    if (createArticleDto.tags && createArticleDto.tags.length > 0) {
+      await this.updateArticleTags(article.id, createArticleDto.tags);
+    }
+
+    return this.findOne(article.id);
   }
 
   async findAll(page = 1, limit = 10, lang: Language = 'ru') {
@@ -37,6 +46,13 @@ export class ArticleService {
       skip,
       take: limit,
       where: { lang: lang },
+      include: {
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
     });
   }
 
@@ -49,6 +65,13 @@ export class ArticleService {
 
     const article = await this.prisma.article.findFirst({
       where: isUUID ? { id: identifier } : { slug: identifier },
+      include: {
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
     });
 
     if (!article) {
@@ -108,6 +131,82 @@ export class ArticleService {
     return this.prisma.article.update({
       where: { id },
       data: { mainImage: null },
+    });
+  }
+
+  async createTag(name: string) {
+    return this.prisma.tag.create({
+      data: { name },
+    });
+  }
+
+  async getAllTags() {
+    return this.prisma.tag.findMany({
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async deleteTag(id: string) {
+    return this.prisma.tag.delete({
+      where: { id },
+    });
+  }
+
+  async updateArticleTags(articleId: string, tagNames: string[]) {
+    const article = await this.findOne(articleId);
+    if (!article) {
+      throw new HttpException('Article not found', 404);
+    }
+
+    // Найти или создать теги
+    const tags = await Promise.all(
+      tagNames.map(async (name) => {
+        return this.prisma.tag.upsert({
+          where: { name },
+          update: {},
+          create: { name },
+        });
+      }),
+    );
+
+    // Обновить связи статьи с тегами
+    return this.prisma.article.update({
+      where: { id: articleId },
+      data: {
+        tags: {
+          set: [], // Сначала удаляем все связи
+          connect: tags.map((tag) => ({ id: tag.id })), // Затем добавляем новые
+        },
+      },
+      include: {
+        tags: true,
+      },
+    });
+  }
+
+  async getArticlesByTag(
+    tagName: string,
+    page = 1,
+    limit = 10,
+    lang: Language = 'ru',
+  ) {
+    const skip = (page - 1) * limit;
+
+    return this.prisma.article.findMany({
+      where: {
+        lang,
+        tags: {
+          some: {
+            name: tagName,
+          },
+        },
+      },
+      include: {
+        tags: true,
+      },
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

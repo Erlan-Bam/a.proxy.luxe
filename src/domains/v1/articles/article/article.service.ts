@@ -49,6 +49,7 @@ export class ArticleService {
       include: {
         tags: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

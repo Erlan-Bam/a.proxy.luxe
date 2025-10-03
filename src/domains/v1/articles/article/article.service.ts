@@ -24,6 +24,7 @@ export class ArticleService {
         title: createArticleDto.title,
         content: createArticleDto.content,
         images: createArticleDto.images,
+        mainImage: createArticleDto.mainImage,
         lang: createArticleDto.lang,
         slug,
       },
@@ -67,6 +68,7 @@ export class ArticleService {
       title: updateArticleDto.title ?? article.title,
       content: updateArticleDto.content ?? article.content,
       images: updateArticleDto.images ?? article.images,
+      mainImage: updateArticleDto.mainImage ?? article.mainImage,
       lang: updateArticleDto.lang ?? article.lang,
     };
 
@@ -83,5 +85,29 @@ export class ArticleService {
 
   async remove(id: string): Promise<Article> {
     return await this.prisma.article.delete({ where: { id } });
+  }
+
+  async setMainImage(id: string, mainImage: string) {
+    const article = await this.findOne(id);
+    if (!article) {
+      throw new HttpException('Article not found', 404);
+    }
+
+    return this.prisma.article.update({
+      where: { id },
+      data: { mainImage },
+    });
+  }
+
+  async removeMainImage(id: string) {
+    const article = await this.findOne(id);
+    if (!article) {
+      throw new HttpException('Article not found', 404);
+    }
+
+    return this.prisma.article.update({
+      where: { id },
+      data: { mainImage: null },
+    });
   }
 }

@@ -93,6 +93,7 @@ model Article {
   content        String   @db.Text
   lang           Language
   images         String[]
+  mainImage      String?
   slug           String   @default("")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt @default(now())

@@ -23,4 +23,8 @@ export class CreateArticleDto {
   @IsArray()
   @IsString({ each: true })
   images?: string[];
+
+  @IsOptional()
+  @IsString()
+  mainImage?: string;
 }

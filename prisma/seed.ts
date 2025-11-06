@@ -4,12 +4,10 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.order.updateMany({
-    where: {
-      id: '8438a010-ce18-4ce1-bba6-f05764070fa5',
-    },
+  await prisma.user.update({
+    where: { email: 'erlanzh.gg@gmail.com' },
     data: {
-      proxySellerId: `3594637`,
+      type: 'USER',
     },
   });
 }

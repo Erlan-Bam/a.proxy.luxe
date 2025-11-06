@@ -553,8 +553,6 @@ export class UserService {
     let { user, promocode, discount, limit } = data;
     let userId: string | undefined = undefined;
 
-    console.log('user', user);
-
     if (user.type !== UserType.ADMIN) {
       const existingCoupon = await this.prisma.coupon.findFirst({
         where: {

@@ -58,10 +58,10 @@ export class ArticleController {
   findAll(
     @Query('lang', new ParseEnumPipe(Language)) lang: Language,
     @Query('page') page = 1,
-    @Query('limit') limit = 10,
+    @Query('limit') limit = 9,
   ) {
-    const pageNumber = parseInt(page as any, 10);
-    const limitNumber = parseInt(limit as any, 10);
+    const pageNumber = parseInt(page as any, 9);
+    const limitNumber = parseInt(limit as any, 9);
     return this.articleService.findAll(pageNumber, limitNumber, lang);
   }
 

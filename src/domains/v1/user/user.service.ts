@@ -553,6 +553,8 @@ export class UserService {
     let { user, promocode, discount, limit } = data;
     let userId: string | undefined = undefined;
 
+    console.log('user', user);
+
     if (user.type !== UserType.ADMIN) {
       const existingCoupon = await this.prisma.coupon.findFirst({
         where: {
@@ -563,7 +565,9 @@ export class UserService {
       if (existingCoupon) {
         throw new HttpException('You already have an active promo code', 400);
       }
-      (limit = 999999999), (discount = 5), (userId = user.id);
+      limit = 999999999;
+      discount = 5;
+      userId = user.id;
     }
 
     return await this.prisma.coupon.create({

@@ -15,6 +15,8 @@ import { UserService } from '../user/user.service';
 
 @Injectable()
 export class OrderService {
+  private processingOrders = new Set<string>();
+
   constructor(
     private readonly prisma: PrismaService,
     private productService: ProductService,
@@ -177,6 +179,14 @@ export class OrderService {
   }
 
   async finishOrder(paymentDto: FinishOrderDto, lang: string = 'en') {
+    const lockKey = paymentDto.orderId;
+
+    if (this.processingOrders.has(lockKey)) {
+      throw new HttpException('Order is already being processed', 400);
+    }
+
+    this.processingOrders.add(lockKey);
+
     try {
       return await this.prisma.$transaction(
         async (prisma) => {
@@ -343,6 +353,7 @@ export class OrderService {
         },
       );
     } finally {
+      this.processingOrders.delete(lockKey);
       console.log('Finished processing order' + paymentDto.orderId);
     }
   }

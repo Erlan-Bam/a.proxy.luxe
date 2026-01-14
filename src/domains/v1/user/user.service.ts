@@ -270,9 +270,9 @@ export class UserService {
 
     const transporter = nodemailer.createTransport({
       pool: true,
-      host: 'smtp.timeweb.ru',
-      port: 465,
-      secure: true,
+      host: 'mail.proxy.luxe',
+      port: 587,
+      secure: false,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
@@ -680,9 +680,9 @@ export class UserService {
 
     const transporter = nodemailer.createTransport({
       pool: true,
-      host: 'smtp.timeweb.ru',
-      port: 465,
-      secure: true,
+      host: 'mail.proxy.luxe',
+      port: 587,
+      secure: false,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
@@ -896,9 +896,9 @@ export class UserService {
 
     const transporter = nodemailer.createTransport({
       pool: true,
-      host: 'smtp.timeweb.ru',
-      port: 465,
-      secure: true,
+      host: 'mail.proxy.luxe',
+      port: 587,
+      secure: false,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
@@ -1022,7 +1022,7 @@ export class UserService {
     `;
 
       const transporter = nodemailer.createTransport({
-        host: 'smtp.timeweb.ru',
+        host: 'mail.proxy.luxe',
         port: 465,
         secure: true,
         auth: {

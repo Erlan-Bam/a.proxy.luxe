@@ -284,13 +284,14 @@ export class OrderService {
           console.log('placedOrder', placedOrder);
 
           // Update user balance using the transaction prisma instance
-          await prisma.user.updateMany({
+          const updatedUser = await prisma.user.update({
             where: {
               id: order.userId,
-              balance: { gte: totalPrice },
             },
             data: {
-              balance: { decrement: totalPrice },
+              balance: {
+                decrement: totalPrice,
+              },
             },
           });
 
@@ -349,7 +350,7 @@ export class OrderService {
         },
         {
           timeout: 60000,
-          isolationLevel: 'Serializable',
+          isolationLevel: 'RepeatableRead',
         },
       );
     } finally {

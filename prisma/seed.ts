@@ -4,8 +4,10 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.order.findMany({ where: { status: 'PROCESSING' } });
-  s;
+  const orders = await prisma.order.findMany({
+    where: { status: 'PROCESSING' },
+  });
+  console.log('Заказы со статусом PROCESSING:', orders);
 }
 
 main()

@@ -17,7 +17,9 @@ async function main() {
     '526f8b5a-b32e-4bc3-b8a4-7744291819d8',
   ];
 
-  console.log(`Looking for ${failedOrderIds.length} orders from error logs...\n`);
+  console.log(
+    `Looking for ${failedOrderIds.length} orders from error logs...\n`,
+  );
 
   // Get orders by specific IDs (any status)
   const failedOrders = await prisma.order.findMany({
@@ -38,7 +40,9 @@ async function main() {
     orderBy: { updatedAt: 'desc' },
   });
 
-  console.log(`Found ${failedOrders.length} out of ${failedOrderIds.length} orders in database\n`);
+  console.log(
+    `Found ${failedOrders.length} out of ${failedOrderIds.length} orders in database\n`,
+  );
 
   if (failedOrders.length > 0) {
     console.log('=== DETAILED ORDER INFORMATION ===\n');
@@ -104,16 +108,18 @@ async function main() {
   const missingIds = failedOrderIds.filter(
     (id) => !failedOrders.some((o) => o.id === id),
   );
-  
+
   if (missingIds.length > 0) {
     console.log(`\n=== MISSING ORDERS ===`);
-    console.log(`${missingIds.length} orders not found (may have been deleted):`);
+    console.log(
+      `${missingIds.length} orders not found (may have been deleted):`,
+    );
     missingIds.forEach((id) => console.log(`  - ${id}`));
   }
 
   // Check all order statuses
   console.log(`\n=== ALL ORDERS SUMMARY ===`);
-  
+
   const processingCount = await prisma.order.count({
     where: { status: 'PROCESSING' },
   });

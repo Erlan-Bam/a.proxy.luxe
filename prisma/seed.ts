@@ -4,12 +4,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.user.update({
-    where: { email: 'erlanzh.gg@gmail.com' },
-    data: {
-      type: 'USER',
-    },
-  });
+  await prisma.order.findMany({ where: { status: 'PROCESSING' } });
+  s;
 }
 
 main()

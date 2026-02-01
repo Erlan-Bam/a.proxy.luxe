@@ -134,6 +134,67 @@ async function main() {
     where: { status: 'PAID' },
   });
   console.log(`Paid orders: ${paidCount}`);
+
+  // Check the user's existing orders with proxySellerId
+  console.log(`\n=== USER PROXY SELLER ANALYSIS ===`);
+  
+  const affectedUserIds = [...new Set(failedOrders.map(o => o.userId))];
+  
+  for (const userId of affectedUserIds) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, balance: true }
+    });
+    
+    console.log(`\nUser: ${user?.email} (${userId})`);
+    console.log(`Balance: $${user?.balance}`);
+    
+    const userOrdersWithProxy = await prisma.order.findMany({
+      where: { 
+        userId, 
+        proxySellerId: { not: null } 
+      },
+      select: { 
+        id: true, 
+        proxySellerId: true, 
+        type: true, 
+        status: true,
+        tariff: true,
+        createdAt: true 
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    console.log(`  Orders with proxySellerId: ${userOrdersWithProxy.length}`);
+    
+    if (userOrdersWithProxy.length > 0) {
+      console.log(`  Details:`);
+      userOrdersWithProxy.forEach((order, idx) => {
+        console.log(`    ${idx + 1}. Order ID: ${order.id}`);
+        console.log(`       Proxy Seller ID: ${order.proxySellerId}`);
+        console.log(`       Type: ${order.type}`);
+        console.log(`       Status: ${order.status}`);
+        console.log(`       Tariff: ${order.tariff || 'N/A'}`);
+        console.log(`       Created: ${order.createdAt}`);
+      });
+      
+      // Simulate what getActiveProxyList does
+      console.log(`\n  ProxySellerMap simulation:`);
+      const proxySellerMap = new Map(
+        userOrdersWithProxy.map((order) => [order.proxySellerId, order.id]),
+      );
+      console.log(`    Map size: ${proxySellerMap.size}`);
+      console.log(`    Map entries:`, Array.from(proxySellerMap.entries()));
+    } else {
+      console.log(`  ⚠️  NO orders with proxySellerId found - this is why resident is undefined!`);
+    }
+    
+    // Check all orders for this user
+    const allUserOrders = await prisma.order.count({
+      where: { userId }
+    });
+    console.log(`  Total orders (all statuses): ${allUserOrders}`);
+  }
 }
 
 main()

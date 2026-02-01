@@ -818,22 +818,120 @@ export class ProductService {
   }
 
   async placeOrder(orderInfo: OrderInfo) {
+    console.log(
+      '[PRODUCT.SERVICE] placeOrder called with:',
+      JSON.stringify(orderInfo, null, 2),
+    );
     try {
       if (orderInfo.type !== 'resident') {
+        console.log(
+          '[PRODUCT.SERVICE] Processing non-resident order type:',
+          orderInfo.type,
+        );
+        console.log(
+          '[PRODUCT.SERVICE] Processing non-resident order type:',
+          orderInfo.type,
+        );
         const response = await this.proxySeller.post('/order/make', orderInfo);
-        return { orderId: response.data.data.orderId.toString() };
+        console.log(
+          '[PRODUCT.SERVICE] Non-resident response:',
+          JSON.stringify(response.data, null, 2),
+        );
+        const result = {
+          orderId: response.data.data.orderId.toString(),
+          package_key: undefined,
+        };
+        console.log('[PRODUCT.SERVICE] Returning non-resident result:', result);
+        return result;
       } else {
+        console.log('[PRODUCT.SERVICE] Processing resident order');
+        console.log('[PRODUCT.SERVICE] Tariff ID:', orderInfo.tariffId);
+        console.log('[PRODUCT.SERVICE] User ID:', orderInfo.userId);
+        console.log('[PRODUCT.SERVICE] Tariff string:', orderInfo.tariff);
+
         const tariffResponse = await this.proxySeller.post('/order/make', {
           tarifId: orderInfo.tariffId,
           paymentId: 1,
         });
+        console.log(
+          '[PRODUCT.SERVICE] Tariff response:',
+          JSON.stringify(tariffResponse.data, null, 2),
+        );
+
         const tariff = await this.convertToBytes(orderInfo.tariff as string);
+        console.log('[PRODUCT.SERVICE] Converted tariff to bytes:', tariff);
+
         const proxies = await this.getActiveProxyList(
           orderInfo.userId,
           'resident',
         );
+        console.log(
+          '[PRODUCT.SERVICE] getActiveProxyList returned status:',
+          proxies.status,
+        );
+        console.log('[PRODUCT.SERVICE] Proxies data exists:', !!proxies.data);
+        console.log(
+          '[PRODUCT.SERVICE] Proxies items exists:',
+          !!proxies.data?.items,
+        );
+        console.log(
+          '[PRODUCT.SERVICE] Proxies items length:',
+          proxies.data?.items?.length,
+        );
+        console.log(
+          '[PRODUCT.SERVICE] Full proxies response:',
+          JSON.stringify(proxies, null, 2),
+        );
+
         const resident = proxies.data?.items[0];
+        console.log(
+          '[PRODUCT.SERVICE] Resident (first item):',
+          resident ? 'EXISTS' : 'NULL/UNDEFINED',
+        );
+        console.log(
+          '[PRODUCT.SERVICE] Resident value:',
+          JSON.stringify(resident, null, 2),
+        );
+        console.log(
+          '[PRODUCT.SERVICE] Resident (first item):',
+          resident ? 'EXISTS' : 'NULL/UNDEFINED',
+        );
+        console.log(
+          '[PRODUCT.SERVICE] Resident value:',
+          JSON.stringify(resident, null, 2),
+        );
         if (resident) {
+          console.log(
+            '[PRODUCT.SERVICE] Resident found, accessing package_info',
+          );
+          console.log(
+            '[PRODUCT.SERVICE] package_info exists:',
+            !!resident.package_info,
+          );
+          console.log(
+            '[PRODUCT.SERVICE] package_info value:',
+            JSON.stringify(resident.package_info, null, 2),
+          );
+
+          if (!resident.package_info) {
+            console.error(
+              '[PRODUCT.SERVICE] ERROR: package_info is null/undefined!',
+            );
+            throw new HttpException(
+              'Package info is missing for resident proxy',
+              500,
+            );
+          }
+
+          console.log(
+            '[PRODUCT.SERVICE] package_key:',
+            resident.package_info.package_key,
+          );
+          console.log(
+            '[PRODUCT.SERVICE] traffic_limit:',
+            resident.package_info.traffic_limit,
+          );
+
           const response = await this.proxySeller.post(
             '/residentsubuser/update',
             {
@@ -846,11 +944,19 @@ export class ProductService {
               package_key: resident.package_info.package_key,
             },
           );
+          console.log(
+            '[PRODUCT.SERVICE] Update response:',
+            JSON.stringify(response.data, null, 2),
+          );
+          console.log('[PRODUCT.SERVICE] Returning update result');
           return {
             package_key: response.data.data.package_key,
             orderId: tariffResponse.data.data.orderId.toString(),
           };
         } else {
+          console.log(
+            '[PRODUCT.SERVICE] No existing resident found, creating new one',
+          );
           const response = await this.proxySeller.post(
             '/residentsubuser/create',
             {
@@ -860,6 +966,11 @@ export class ProductService {
               traffic_limit: tariff.toString(),
             },
           );
+          console.log(
+            '[PRODUCT.SERVICE] Create response:',
+            JSON.stringify(response.data, null, 2),
+          );
+          console.log('[PRODUCT.SERVICE] Returning create result');
           return {
             package_key: response.data.data.package_key,
             orderId: tariffResponse.data.data.orderId.toString(),
@@ -867,7 +978,14 @@ export class ProductService {
         }
       }
     } catch (error) {
-      console.log(error);
+      console.error('[PRODUCT.SERVICE] ERROR in placeOrder:');
+      console.error('[PRODUCT.SERVICE] Error message:', error.message);
+      console.error('[PRODUCT.SERVICE] Error stack:', error.stack);
+      console.error('[PRODUCT.SERVICE] Full error:', error);
+      console.error(
+        '[PRODUCT.SERVICE] OrderInfo that caused error:',
+        JSON.stringify(orderInfo, null, 2),
+      );
       throw new HttpException('Failed to place an order', 500);
     }
   }

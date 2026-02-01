@@ -276,12 +276,24 @@ export class OrderService {
             userId: order.userId,
           };
 
+          console.log(
+            '[ORDER.SERVICE] Calling placeOrder with orderInfo:',
+            JSON.stringify(orderInfo, null, 2),
+          );
+          console.log('[ORDER.SERVICE] Order type:', order.type);
+          console.log('[ORDER.SERVICE] User ID:', order.userId);
+
           const placedOrder = await this.productService.placeOrder(orderInfo);
+          console.log(
+            '[ORDER.SERVICE] placeOrder returned:',
+            JSON.stringify(placedOrder, null, 2),
+          );
           const package_key = placedOrder.package_key,
             orderId = placedOrder.orderId;
 
-          console.log('orderId', orderId);
-          console.log('placedOrder', placedOrder);
+          console.log('[ORDER.SERVICE] Extracted package_key:', package_key);
+          console.log('[ORDER.SERVICE] Extracted orderId:', orderId);
+          console.log('[ORDER.SERVICE] Full placedOrder object:', placedOrder);
 
           // Update user balance using the transaction prisma instance
           const updatedUser = await prisma.user.update({

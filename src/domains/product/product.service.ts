@@ -948,6 +948,19 @@ export class ProductService {
             '[PRODUCT.SERVICE] Update response:',
             JSON.stringify(response.data, null, 2),
           );
+
+          // Check if update was successful
+          if (response.data.status !== 'success' || !response.data.data) {
+            console.error(
+              '[PRODUCT.SERVICE] ERROR: Update resident package failed:',
+              JSON.stringify(response.data.errors, null, 2),
+            );
+            throw new HttpException(
+              response.data.errors?.[0]?.message || 'Failed to update resident package',
+              500,
+            );
+          }
+
           console.log('[PRODUCT.SERVICE] Returning update result');
           return {
             package_key: response.data.data.package_key,
@@ -1149,12 +1162,16 @@ export class ProductService {
   }
   async getOneMonthLaterFormatted(): Promise<string> {
     const now = new Date();
-    const thirtyDaysLater = new Date(now);
-    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+    // Calculate one month later, but ensure it's strictly less than the next month's same day
+    // API requires: date > today AND date < (today + 1 month)
+    const oneMonthLater = new Date(now);
+    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+    // Subtract 1 day to ensure we're within the valid range (less than the limit)
+    oneMonthLater.setDate(oneMonthLater.getDate() - 1);
 
-    const day = String(thirtyDaysLater.getDate()).padStart(2, '0');
-    const month = String(thirtyDaysLater.getMonth() + 1).padStart(2, '0'); // months are 0-indexed
-    const year = thirtyDaysLater.getFullYear();
+    const day = String(oneMonthLater.getDate()).padStart(2, '0');
+    const month = String(oneMonthLater.getMonth() + 1).padStart(2, '0'); // months are 0-indexed
+    const year = oneMonthLater.getFullYear();
 
     return `${day}.${month}.${year}`;
   }

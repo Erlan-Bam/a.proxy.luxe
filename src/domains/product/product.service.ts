@@ -956,7 +956,8 @@ export class ProductService {
               JSON.stringify(response.data.errors, null, 2),
             );
             throw new HttpException(
-              response.data.errors?.[0]?.message || 'Failed to update resident package',
+              response.data.errors?.[0]?.message ||
+                'Failed to update resident package',
               500,
             );
           }

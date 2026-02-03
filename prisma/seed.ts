@@ -7,16 +7,7 @@ async function main() {
   console.log('=== CHECKING FAILED ORDERS FROM ERROR LOGS ===\n');
 
   // Order IDs from the error logs
-  const failedOrderIds = [
-    '34fa01e4-8810-462e-af14-085c5118d1ea',
-    '8e58a204-fd32-4fd9-aa88-d8fbafe9483b',
-    '4e4f6a6c-d852-4fe5-949e-1aed60cb7f0c',
-    '50232c4b-b550-4fa8-982d-3e6ed6c91995',
-    '6c4de931-6268-43cb-8d77-7e2e853862f1',
-    '538bf724-cdea-42c2-8145-23d7aa8aa4d1',
-    '526f8b5a-b32e-4bc3-b8a4-7744291819d8',
-    '526e0c8c-4363-4d98-bb7b-f00d28d59a99',
-  ];
+  const failedOrderIds = ['dfc64815-b85e-43ed-814c-ae150fc51069'];
 
   console.log(
     `Looking for ${failedOrderIds.length} orders from error logs...\n`,

@@ -13,7 +13,7 @@ async function main() {
   const today = new Date();
   const startTime = new Date(today);
   startTime.setHours(11, 0, 0, 0); // 11:00 AM
-  
+
   const endTime = new Date(today);
   endTime.setHours(13, 0, 0, 0); // 1:00 PM
 
@@ -47,8 +47,10 @@ async function main() {
 
   if (failedOrders.length === 0) {
     console.log('❌ No failed orders found in this time range');
-    console.log('\nTrying broader search (all orders between 11 AM - 1 PM)...\n');
-    
+    console.log(
+      '\nTrying broader search (all orders between 11 AM - 1 PM)...\n',
+    );
+
     const allOrders = await prisma.order.findMany({
       where: {
         createdAt: {
@@ -69,9 +71,11 @@ async function main() {
         createdAt: 'desc',
       },
     });
-    
+
     if (allOrders.length > 0) {
-      console.log(`Found ${allOrders.length} total orders in this time range:\n`);
+      console.log(
+        `Found ${allOrders.length} total orders in this time range:\n`,
+      );
       allOrders.forEach((o, idx) => {
         console.log(`${idx + 1}. Order ID: ${o.id}`);
         console.log(`   Type: ${o.type}`);
@@ -85,11 +89,13 @@ async function main() {
     return;
   }
 
-  console.log(`✅ Found ${failedOrders.length} failed order(s) where orderId is NULL!\n`);
+  console.log(
+    `✅ Found ${failedOrders.length} failed order(s) where orderId is NULL!\n`,
+  );
 
   // Process first order for simulation
   const order = failedOrders[0];
-  
+
   console.log('=== FAILED ORDERS LIST ===\n');
   failedOrders.forEach((o, idx) => {
     console.log(`${idx + 1}. Order UUID: ${o.id}`);

@@ -828,11 +828,40 @@ export class ProductService {
           '[PRODUCT.SERVICE] Processing non-resident order type:',
           orderInfo.type,
         );
+
+        // Build request payload with only necessary fields
+        const requestPayload: any = {
+          countryId: orderInfo.countryId,
+          periodId: orderInfo.periodId,
+          paymentId: 1,
+          quantity: orderInfo.quantity,
+        };
+
+        // Add optional fields only if provided
+        if (orderInfo.coupon) {
+          requestPayload.coupon = orderInfo.coupon;
+        }
+        if (orderInfo.authorization) {
+          requestPayload.authorization = orderInfo.authorization;
+        }
+        if (orderInfo.customTargetName) {
+          requestPayload.customTargetName = orderInfo.customTargetName;
+        }
+
+        // Type-specific fields
+        if (orderInfo.type === 'ipv6' && orderInfo.protocol) {
+          requestPayload.protocol = orderInfo.protocol;
+        }
+
         console.log(
-          '[PRODUCT.SERVICE] Processing non-resident order type:',
-          orderInfo.type,
+          '[PRODUCT.SERVICE] Request payload:',
+          JSON.stringify(requestPayload, null, 2),
         );
-        const response = await this.proxySeller.post('/order/make', orderInfo);
+
+        const response = await this.proxySeller.post(
+          '/order/make',
+          requestPayload,
+        );
         console.log(
           '[PRODUCT.SERVICE] Non-resident response:',
           JSON.stringify(response.data, null, 2),

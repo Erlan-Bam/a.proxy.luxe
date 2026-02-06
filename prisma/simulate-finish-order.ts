@@ -150,18 +150,45 @@ async function main() {
   // Step 2: Get reference data
   console.log('Step 2: Get reference data for type:', order.type);
 
-  // Mock reference data for ISP
-  const ispCountries = [
-    { id: 3758, name: 'USA', alpha3: 'USA' },
-    { id: 4479, name: 'Poland', alpha3: 'POL' },
-    { id: 4480, name: 'Netherlands', alpha3: 'NLD' },
-    { id: 9767, name: 'Germany', alpha3: 'DEU' },
-    { id: 7738, name: 'England', alpha3: 'GBR' },
-  ];
+  // Fetch real reference data from Proxy Seller API
+  console.log('  Fetching real reference data from API...');
+  let countryId: number | undefined;
+  
+  try {
+    const referenceUrl = `${BASE_URL}/reference/list`;
+    const response = await fetch(referenceUrl);
+    const referenceData = await response.json();
 
-  const countryId = ispCountries.find(
-    (country) => order.country && country.name.endsWith(order.country),
-  )?.id;
+    if (referenceData.status === 'success' && referenceData.data) {
+      const typeData = referenceData.data[order.type];
+      
+      if (typeData && typeData.country) {
+        console.log(`  ✅ Fetched ${typeData.country.length} countries for ${order.type} type`);
+        
+        // Find matching country
+        const matchedCountry = typeData.country.find(
+          (country: any) => 
+            order.country && 
+            (country.name.toLowerCase().includes(order.country.toLowerCase()) ||
+             country.alpha3.toLowerCase() === order.country.toLowerCase())
+        );
+        
+        if (matchedCountry) {
+          countryId = matchedCountry.id;
+          console.log(`  ✅ Matched Country: ${matchedCountry.name} (ID: ${countryId})`);
+        } else {
+          console.log(`  ❌ Country '${order.country}' not found in reference data`);
+          console.log(`  Available countries:`, typeData.country.map((c: any) => c.name).join(', '));
+        }
+      } else {
+        console.log(`  ❌ No country data found for type '${order.type}'`);
+      }
+    } else {
+      console.log(`  ❌ Failed to fetch reference data: ${referenceData.message || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error(`  ❌ Error fetching reference data:`, error.message);
+  }
 
   console.log(`  Country: ${order.country}`);
   console.log(`  Mapped Country ID: ${countryId || 'NOT FOUND'}\n`);

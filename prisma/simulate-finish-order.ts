@@ -153,7 +153,7 @@ async function main() {
   // Fetch real reference data from Proxy Seller API
   console.log('  Fetching real reference data from API...');
   let countryId: number | undefined;
-  
+
   try {
     const referenceUrl = `${BASE_URL}/reference/list`;
     const response = await fetch(referenceUrl);
@@ -161,30 +161,41 @@ async function main() {
 
     if (referenceData.status === 'success' && referenceData.data) {
       const typeData = referenceData.data[order.type];
-      
+
       if (typeData && typeData.country) {
-        console.log(`  ✅ Fetched ${typeData.country.length} countries for ${order.type} type`);
-        
+        console.log(
+          `  ✅ Fetched ${typeData.country.length} countries for ${order.type} type`,
+        );
+
         // Find matching country
         const matchedCountry = typeData.country.find(
-          (country: any) => 
-            order.country && 
+          (country: any) =>
+            order.country &&
             (country.name.toLowerCase().includes(order.country.toLowerCase()) ||
-             country.alpha3.toLowerCase() === order.country.toLowerCase())
+              country.alpha3.toLowerCase() === order.country.toLowerCase()),
         );
-        
+
         if (matchedCountry) {
           countryId = matchedCountry.id;
-          console.log(`  ✅ Matched Country: ${matchedCountry.name} (ID: ${countryId})`);
+          console.log(
+            `  ✅ Matched Country: ${matchedCountry.name} (ID: ${countryId})`,
+          );
         } else {
-          console.log(`  ❌ Country '${order.country}' not found in reference data`);
-          console.log(`  Available countries:`, typeData.country.map((c: any) => c.name).join(', '));
+          console.log(
+            `  ❌ Country '${order.country}' not found in reference data`,
+          );
+          console.log(
+            `  Available countries:`,
+            typeData.country.map((c: any) => c.name).join(', '),
+          );
         }
       } else {
         console.log(`  ❌ No country data found for type '${order.type}'`);
       }
     } else {
-      console.log(`  ❌ Failed to fetch reference data: ${referenceData.message || 'Unknown error'}`);
+      console.log(
+        `  ❌ Failed to fetch reference data: ${referenceData.message || 'Unknown error'}`,
+      );
     }
   } catch (error) {
     console.error(`  ❌ Error fetching reference data:`, error.message);

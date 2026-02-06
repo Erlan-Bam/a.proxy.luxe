@@ -7,16 +7,29 @@ const PROXY_SELLER_API_KEY = process.env.PROXY_SELLER || 'YOUR_API_KEY';
 const BASE_URL = `https://proxy-seller.com/personal/api/v1/${PROXY_SELLER_API_KEY}`;
 
 async function main() {
-  console.log('=== SIMULATING FINISH ORDER FOR ISP TYPE ===\n');
+  console.log('=== FINDING FAILED ORDERS (11 AM - 1 PM) ===\n');
 
-  // Find order by proxySellerId (which is 4337705)
-  const order = await prisma.order.findFirst({
+  // Get today's date or specify a date
+  const today = new Date();
+  const startTime = new Date(today);
+  startTime.setHours(11, 0, 0, 0); // 11:00 AM
+  
+  const endTime = new Date(today);
+  endTime.setHours(13, 0, 0, 0); // 1:00 PM
+
+  console.log(`Searching for orders created between:`);
+  console.log(`  Start: ${startTime.toLocaleString()}`);
+  console.log(`  End: ${endTime.toLocaleString()}\n`);
+
+  // Find orders created between 11 AM - 1 PM where orderId is null (failed orders)
+  const failedOrders = await prisma.order.findMany({
     where: {
-      OR: [
-        { proxySellerId: '4337705' },
-        { orderId: '4337705' },
-        { id: '4337705' },
-      ],
+      createdAt: {
+        gte: startTime,
+        lte: endTime,
+      },
+      orderId: null, // Orders where orderId was not updated
+      type: 'isp', // Optional: filter by type
     },
     include: {
       user: {
@@ -27,35 +40,69 @@ async function main() {
         },
       },
     },
+    orderBy: {
+      createdAt: 'desc',
+    },
   });
 
-  if (!order) {
-    console.log('❌ Order not found with ID/proxySellerId: 4337705');
-    console.log('\nSearching for orders with similar IDs...');
-
-    const similarOrders = await prisma.order.findMany({
+  if (failedOrders.length === 0) {
+    console.log('❌ No failed orders found in this time range');
+    console.log('\nTrying broader search (all orders between 11 AM - 1 PM)...\n');
+    
+    const allOrders = await prisma.order.findMany({
       where: {
-        OR: [
-          { proxySellerId: { contains: '4337' } },
-          { orderId: { contains: '4337' } },
-        ],
+        createdAt: {
+          gte: startTime,
+          lte: endTime,
+        },
       },
-      take: 5,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            balance: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
-
-    if (similarOrders.length > 0) {
-      console.log(`\nFound ${similarOrders.length} similar orders:`);
-      similarOrders.forEach((o) => {
-        console.log(`  - Order ID: ${o.id}`);
-        console.log(`    Proxy Seller ID: ${o.proxySellerId}`);
-        console.log(`    Order ID: ${o.orderId}`);
-        console.log(`    Type: ${o.type}`);
-        console.log(`    Status: ${o.status}\n`);
+    
+    if (allOrders.length > 0) {
+      console.log(`Found ${allOrders.length} total orders in this time range:\n`);
+      allOrders.forEach((o, idx) => {
+        console.log(`${idx + 1}. Order ID: ${o.id}`);
+        console.log(`   Type: ${o.type}`);
+        console.log(`   Status: ${o.status}`);
+        console.log(`   OrderId: ${o.orderId || 'NULL ❌'}`);
+        console.log(`   ProxySellerId: ${o.proxySellerId || 'NULL'}`);
+        console.log(`   Created: ${o.createdAt}`);
+        console.log(`   User: ${o.user.email}\n`);
       });
     }
     return;
   }
 
+  console.log(`✅ Found ${failedOrders.length} failed order(s) where orderId is NULL!\n`);
+
+  // Process first order for simulation
+  const order = failedOrders[0];
+  
+  console.log('=== FAILED ORDERS LIST ===\n');
+  failedOrders.forEach((o, idx) => {
+    console.log(`${idx + 1}. Order UUID: ${o.id}`);
+    console.log(`   User: ${o.user.email}`);
+    console.log(`   Type: ${o.type}`);
+    console.log(`   Status: ${o.status}`);
+    console.log(`   Price: $${o.totalPrice}`);
+    console.log(`   Created: ${o.createdAt}`);
+    console.log(`   OrderId: NULL ❌`);
+    console.log(`   ProxySellerId: ${o.proxySellerId || 'NULL'}\n`);
+  });
+
+  console.log(`\n=== SIMULATING FIRST ORDER: ${order.id} ===\n`);
   console.log('✅ Found order!\n');
   console.log('=== ORDER DETAILS ===');
   console.log(`Order UUID: ${order.id}`);

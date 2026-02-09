@@ -4,6 +4,40 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
+  // Send POST request to update resident proxy
+  console.log('=== UPDATING RESIDENT PROXY ===\n');
+
+  const apiKey = process.env.PROXY_SELLER;
+  if (!apiKey) {
+    console.error(
+      '⚠️  PROXY_SELLER_API_KEY is not set in environment variables',
+    );
+  } else {
+    const url = `https://proxy-seller.com/personal/api/v1/${apiKey}/residentsubuser/update`;
+    const payload = {
+      is_active: true,
+      package_key: 'c1f9ac948467f4e74a10',
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      console.log('Response status:', response.status);
+      console.log('Response data:', JSON.stringify(data, null, 2));
+      console.log('✓ Resident proxy update request completed\n');
+    } catch (error) {
+      console.error('❌ Error updating resident proxy:', error);
+    }
+  }
+  return;
+
   console.log('=== CHECKING FAILED ORDERS FROM ERROR LOGS ===\n');
 
   // Order IDs from the error logs

@@ -29,6 +29,19 @@ async function main() {
       });
 
       const data = await response.json();
+
+      const getURL = `https://proxy-seller.com/personal/api/v1/${apiKey}/residentsubuser/packages`;
+      const getResponse = await fetch(getURL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const getData = await getResponse.json();
+      console.log(
+        'Current resident packages:',
+        JSON.stringify(getData, null, 2),
+      );
       console.log('Response status:', response.status);
       console.log('Response data:', JSON.stringify(data, null, 2));
       console.log('✓ Resident proxy update request completed\n');

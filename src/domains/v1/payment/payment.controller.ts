@@ -192,6 +192,12 @@ export class PaymentController {
       },
     );
     console.log('digiseller', code);
+
+    if (!code) {
+      console.error('❌ Digiseller webhook called without uniquecode');
+      return res.status(200).json({ message: 'Missing unique code' });
+    }
+
     let userId: string;
     let amount: number;
     let inv: number;

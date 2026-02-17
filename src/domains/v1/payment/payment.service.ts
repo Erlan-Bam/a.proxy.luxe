@@ -79,6 +79,20 @@ export class PaymentService {
       }
     }
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      console.error(
+        `❌ User not found for payment: userId=${userId}, method=${method}, amount=${amount}, inv=${inv}`,
+      );
+      throw new HttpException(
+        `User with id ${userId} not found. Cannot process payment.`,
+        404,
+      );
+    }
+
     await this.prisma.user.update({
       where: { id: userId },
       data: { balance: { increment: amount } },

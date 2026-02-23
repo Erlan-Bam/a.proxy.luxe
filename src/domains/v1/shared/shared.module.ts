@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from './prisma.service';
+import { CaptchaService } from './captcha.service';
 
 @Module({
-  providers: [PrismaService],
-  exports: [PrismaService],
+  imports: [ConfigModule],
+  providers: [PrismaService, CaptchaService],
+  exports: [PrismaService, CaptchaService],
 })
 export class SharedModule {}

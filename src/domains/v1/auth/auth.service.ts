@@ -10,6 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../shared/prisma.service';
+import { CaptchaService } from '../shared/captcha.service';
 import { User } from '@prisma/client';
 import { UserService } from '../user/user.service';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -33,6 +34,7 @@ export class AuthService {
     private userService: UserService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly captchaService: CaptchaService,
   ) {}
 
   async register(registerDto: RegisterDto, request: any): Promise<User> {
@@ -44,7 +46,11 @@ export class AuthService {
         ?.split('-')[0]
         ?.toLowerCase() || 'en';
 
-    const { password, referralId, email } = registerDto;
+    if (registerDto.captchaToken) {
+      await this.captchaService.verifyCaptcha(registerDto.captchaToken);
+    }
+
+    const { password, captchaToken, referralId, email } = registerDto;
     const user = await this.prisma.user.findUnique({
       where: { email: registerDto.email },
     });

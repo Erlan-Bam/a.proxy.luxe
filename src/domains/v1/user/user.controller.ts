@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UserService } from './user.service';
+import { CaptchaService } from '../shared/captcha.service';
 import { User } from '@prisma/client';
 import { AddBalanceDTO } from './dto/add-balance.dto';
 import { RemoveBalanceDTO } from './dto/remove-balance.dto';
@@ -29,6 +30,7 @@ export class UserController {
   constructor(
     private userService: UserService,
     private productService: ProductService,
+    private captchaService: CaptchaService,
   ) {}
 
   @Get('me')
@@ -179,6 +181,15 @@ export class UserController {
 
   @Post('send-support')
   async sendSupportEmail(@Body() data: SupportMessageDto) {
-    return this.userService.sendSupportEmail(data);
+    if (data.captchaToken) {
+      await this.captchaService.verifyCaptcha(data.captchaToken);
+    }
+
+    return this.userService.sendSupportEmail({
+      name: data.name,
+      email: data.email,
+      support: data.support,
+      message: data.message,
+    });
   }
 }

@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class SupportMessageDto {
   @IsNotEmpty()
@@ -15,4 +15,8 @@ export class SupportMessageDto {
   @IsNotEmpty()
   @IsString()
   message: string;
+
+  @IsString()
+  @IsOptional()
+  captchaToken?: string;
 }

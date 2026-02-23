@@ -8,10 +8,28 @@ import * as tunnel from 'tunnel';
 export class ProxyCheckerService {
   // Fallback URLs. These endpoints return only the IP as a string.
   private fallbackUrls = [
-    'http://api.ipify.org',
+    'http://api64.ipify.org',
     'http://icanhazip.com',
     'http://ifconfig.me/ip',
   ];
+
+  /**
+   * Extract IP and port from a string that may contain IPv4 or bracketed IPv6.
+   * Returns { ip, port } or null.
+   */
+  private extractIpPort(str: string): { ip: string; port: string } | null {
+    // Try IPv6 in brackets first: [2001:db8::1]:8080
+    const ipv6Match = str.match(/\[([0-9a-fA-F:]+)\]:(\d+)/);
+    if (ipv6Match) {
+      return { ip: ipv6Match[1], port: ipv6Match[2] };
+    }
+    // Try IPv4: 1.2.3.4:8080
+    const ipv4Match = str.match(/(\d+\.\d+\.\d+\.\d+):(\d+)/);
+    if (ipv4Match) {
+      return { ip: ipv4Match[1], port: ipv4Match[2] };
+    }
+    return null;
+  }
 
   async checkProxies(proxies: string[], addCountry: boolean): Promise<any[]> {
     // Retrieve our own public IP (without using a proxy)
@@ -19,7 +37,10 @@ export class ProxyCheckerService {
 
     return Promise.all(
       proxies.map(async (raw) => {
-        let [ip, port, login, password] = ['', '', '', ''];
+        let ip = '';
+        let port = '';
+        let login = '';
+        let password = '';
         let proxyType = 'HTTP(s)';
 
         try {
@@ -29,10 +50,36 @@ export class ProxyCheckerService {
           if (raw.startsWith('socks5://') || raw.startsWith('socks4://')) {
             const agent = new SocksProxyAgent(raw);
             proxyType = raw.startsWith('socks5://') ? 'SOCKS5' : 'SOCKS4';
-            const ipMatch = raw.match(/(\d+\.\d+\.\d+\.\d+)/);
-            if (ipMatch) ip = ipMatch[1];
-            port = raw.match(/:(\d+)/)?.[1] || '';
+
+            const extracted = this.extractIpPort(raw);
+            if (extracted) {
+              ip = extracted.ip;
+              port = extracted.port;
+            }
             agentCandidates.push(agent);
+          } else if (raw.includes('[')) {
+            // IPv6 format with brackets:
+            //   [ipv6]:port
+            //   user:pass:[ipv6]:port
+            const bracketMatch = raw.match(
+              /^(?:([^:@\s]+):([^:@\s]+):)?\[([0-9a-fA-F:]+)\]:(\d+)$/,
+            );
+            if (!bracketMatch) {
+              throw new Error('Invalid IPv6 proxy format');
+            }
+
+            login = bracketMatch[1] || '';
+            password = bracketMatch[2] || '';
+            ip = bracketMatch[3];
+            port = bracketMatch[4];
+
+            let proxyUrl: string;
+            if (login && password) {
+              proxyUrl = `http://${login}:${password}@[${ip}]:${port}`;
+            } else {
+              proxyUrl = `http://[${ip}]:${port}`;
+            }
+            agentCandidates.push(new HttpsProxyAgent(proxyUrl));
           } else {
             // For HTTP/HTTPS proxies (colon-separated formats).
             const parts = raw.split(':');
@@ -152,8 +199,8 @@ export class ProxyCheckerService {
    */
   private async getMyIpAddressDirect(): Promise<string> {
     try {
-      const response = await axios.get('http://api.ipify.org', {
-        timeout: 1000,
+      const response = await axios.get('http://api64.ipify.org', {
+        timeout: 10000,
         transformResponse: (data) => data,
       });
       return response.data;

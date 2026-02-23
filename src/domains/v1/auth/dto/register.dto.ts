@@ -21,4 +21,8 @@ export class RegisterDto {
   @IsUUID()
   @IsOptional()
   referralId: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Captcha token is required' })
+  captchaToken: string;
 }

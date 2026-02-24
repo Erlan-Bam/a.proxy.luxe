@@ -46,9 +46,9 @@ export class AuthService {
         ?.split('-')[0]
         ?.toLowerCase() || 'en';
 
-    if (registerDto.captchaToken) {
-      await this.captchaService.verifyCaptcha(registerDto.captchaToken);
-    }
+    // if (registerDto.captchaToken) {
+    //   await this.captchaService.verifyCaptcha(registerDto.captchaToken);
+    // }
 
     const { password, captchaToken, referralId, email } = registerDto;
     const user = await this.prisma.user.findUnique({

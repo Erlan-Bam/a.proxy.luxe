@@ -23,6 +23,6 @@ export class RegisterDto {
   referralId: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Captcha token is required' })
-  captchaToken: string;
+  @IsOptional()
+  captchaToken?: string;
 }

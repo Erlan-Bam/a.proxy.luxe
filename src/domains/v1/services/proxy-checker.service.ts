@@ -156,6 +156,11 @@ export class ProxyCheckerService {
           return {
             status: 'invalid',
             raw,
+            ip: ip || null,
+            port: port || null,
+            login: login || null,
+            password: password || null,
+            type: proxyType,
             error:
               error.response?.status === 407
                 ? 'Proxy Authentication Failed (407)'

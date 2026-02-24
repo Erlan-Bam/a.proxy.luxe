@@ -99,6 +99,12 @@ export class ProxyCheckerService {
                   },
                 }),
               );
+              // Option 3: Try as SOCKS5 proxy (auto-detect protocol).
+              agentCandidates.push(
+                new SocksProxyAgent(
+                  `socks5://${login}:${password}@${ip}:${port}`,
+                ),
+              );
             } else if (parts.length === 2) {
               // Format: ip:port
               [ip, port] = parts;
@@ -111,6 +117,10 @@ export class ProxyCheckerService {
                     port: parseInt(port, 10),
                   },
                 }),
+              );
+              // Also try as SOCKS5 without auth.
+              agentCandidates.push(
+                new SocksProxyAgent(`socks5://${ip}:${port}`),
               );
             } else {
               throw new Error('Invalid proxy format');

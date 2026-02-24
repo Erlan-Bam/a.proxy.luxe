@@ -602,7 +602,7 @@ export class UserService {
           <table align="center" width="100%" style="max-width:600px; background-color: #000000; border-radius: 8px; color: white; padding: 30px;">
             <tr>
               <td align="center" style="font-size: 24px; font-weight: bold; color: #f3d675;">
-                <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;" />
+                <img src="https://i.ibb.co.com/HLfg3tsn/logo.webp" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;" />
                 PROXY.LUXE
               </td>
             </tr>
@@ -774,7 +774,7 @@ export class UserService {
                                               <table border="0" cellpadding="0" cellspacing="0">
                                                   <tr>
                                                       <td align="center">
-                                                          <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;">
+                                                          <img src="https://i.ibb.co.com/HLfg3tsn/logo.webp" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;">
                                                           <span style="font-size: 26px; font-weight: bold; color: #f3d675; letter-spacing: 1px; vertical-align: middle;">PROXY.LUXE</span>
                                                       </td>
                                                   </tr>

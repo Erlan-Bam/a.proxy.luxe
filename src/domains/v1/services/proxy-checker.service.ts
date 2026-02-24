@@ -131,15 +131,30 @@ export class ProxyCheckerService {
           const agentCandidates: any[] = [];
 
           if (detected === 'SOCKS5') {
-            // SOCKS5 proxy
+            // SOCKS5 proxy — try multiple variants:
+            // socks5h = proxy resolves DNS, socks5 = client resolves DNS
             if (login && password) {
+              agentCandidates.push(
+                new SocksProxyAgent(
+                  `socks5h://${login}:${password}@${ip}:${port}`,
+                ),
+              );
               agentCandidates.push(
                 new SocksProxyAgent(
                   `socks5://${login}:${password}@${ip}:${port}`,
                 ),
               );
+              // Also try SOCKS4
+              agentCandidates.push(
+                new SocksProxyAgent(
+                  `socks4://${login}:${password}@${ip}:${port}`,
+                ),
+              );
             }
             // Also try without auth (some SOCKS5 use IP whitelist)
+            agentCandidates.push(
+              new SocksProxyAgent(`socks5h://${ip}:${port}`),
+            );
             agentCandidates.push(
               new SocksProxyAgent(`socks5://${ip}:${port}`),
             );

@@ -60,18 +60,18 @@ export class ProxyCheckerService {
           } else if (raw.includes('[')) {
             // IPv6 format with brackets:
             //   [ipv6]:port
-            //   user:pass:[ipv6]:port
+            //   [ipv6]:port:user:pass
             const bracketMatch = raw.match(
-              /^(?:([^:@\s]+):([^:@\s]+):)?\[([0-9a-fA-F:]+)\]:(\d+)$/,
+              /^\[([0-9a-fA-F:]+)\]:(\d+)(?::([^:@\s]+):([^:@\s]+))?$/,
             );
             if (!bracketMatch) {
               throw new Error('Invalid IPv6 proxy format');
             }
 
-            login = bracketMatch[1] || '';
-            password = bracketMatch[2] || '';
-            ip = bracketMatch[3];
-            port = bracketMatch[4];
+            ip = bracketMatch[1];
+            port = bracketMatch[2];
+            login = bracketMatch[3] || '';
+            password = bracketMatch[4] || '';
 
             let proxyUrl: string;
             if (login && password) {

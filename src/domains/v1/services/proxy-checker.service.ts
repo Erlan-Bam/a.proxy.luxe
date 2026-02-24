@@ -132,12 +132,20 @@ export class ProxyCheckerService {
           };
 
           const start = Date.now();
-          // Attempt all candidate agents concurrently.
-          const ipResponse = await Promise.any(
-            agentCandidates.map((agent) =>
-              this.tryFallbackRequest(agent, headers),
-            ),
+          // Attempt all candidate agents concurrently, track which one succeeded.
+          const result = await Promise.any(
+            agentCandidates.map(async (agent, idx) => {
+              const data = await this.tryFallbackRequest(agent, headers);
+              return { data, agentIndex: idx };
+            }),
           );
+
+          const ipResponse = result.data;
+
+          // If a SocksProxyAgent succeeded, update proxyType.
+          if (agentCandidates[result.agentIndex] instanceof SocksProxyAgent) {
+            proxyType = 'SOCKS5';
+          }
 
           if (!ipResponse) {
             throw new Error('All fallback test URLs failed');

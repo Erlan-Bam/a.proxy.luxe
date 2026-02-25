@@ -782,6 +782,7 @@ export class ProductService {
 
         const traffic = await this.proxySeller.get(`/residentsubuser/packages`);
         const packages = traffic.data.data || [];
+        console.log('[getActiveProxyList] resident packages:', JSON.stringify(packages));
 
         const proxySellerIds = orders.map((order) => order.proxySellerId);
         for (const proxySellerId of proxySellerIds) {
@@ -795,6 +796,7 @@ export class ProductService {
           const foundPackage = packages.find(
             (p) => p.package_key === proxySellerId,
           );
+          console.log(`[getActiveProxyList] foundPackage for ${proxySellerId}:`, JSON.stringify(foundPackage));
 
           result.push({
             package_info: foundPackage,

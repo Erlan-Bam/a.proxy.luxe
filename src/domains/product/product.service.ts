@@ -780,21 +780,30 @@ export class ProductService {
       } else {
         const result: any[] = [];
 
+        console.log('[getActiveProxyList] Fetching resident packages from ProxySeller');
         const traffic = await this.proxySeller.get(`/residentsubuser/packages`);
         const packages = traffic.data.data || [];
+        console.log(`[getActiveProxyList] Got ${packages.length} packages from ProxySeller`);
 
         const proxySellerIds = orders.map((order) => order.proxySellerId);
+        console.log(`[getActiveProxyList] User orders proxySellerIds:`, JSON.stringify(proxySellerIds));
+
         for (const proxySellerId of proxySellerIds) {
+          console.log(`[getActiveProxyList] Fetching lists for package_key: ${proxySellerId}`);
           const response = await this.proxySeller.get(
             `/residentsubuser/lists?package_key=${proxySellerId}`,
           );
+          console.log(`[getActiveProxyList] Lists response for ${proxySellerId}: status=${response.data.status}, items=${response.data.data?.length ?? 0}`);
+
           if (response.data.status !== 'success') {
+            console.warn(`[getActiveProxyList] Skipping ${proxySellerId} - status: ${response.data.status}`);
             continue;
           }
 
           const foundPackage = packages.find(
             (p) => p.package_key === proxySellerId,
           );
+          console.log(`[getActiveProxyList] Package ${proxySellerId}: found=${!!foundPackage}, is_active=${foundPackage?.is_active}, expired_at=${JSON.stringify(foundPackage?.expired_at)}, traffic_left=${foundPackage?.traffic_left}`);
 
           result.push({
             package_info: foundPackage,
@@ -803,6 +812,7 @@ export class ProductService {
           });
         }
 
+        console.log(`[getActiveProxyList] Returning ${result.length} resident items`);
         return {
           status: 'success',
           data: { items: result },
@@ -1104,6 +1114,28 @@ export class ProductService {
     return { status: 'success' };
   }
   async modifyProxyResident(data: ModifyProxyResidentDto) {
+    console.log('[modifyProxyResident] Called with:', JSON.stringify(data));
+
+    // Check package status before attempting to create
+    try {
+      const packagesResp = await this.proxySeller.get('/residentsubuser/packages');
+      const packages = packagesResp.data.data || [];
+      const pkg = packages.find((p: any) => p.package_key === data.package_key);
+      console.log('[modifyProxyResident] Package lookup result:', JSON.stringify(pkg));
+      if (!pkg) {
+        console.error(`[modifyProxyResident] Package ${data.package_key} NOT FOUND in ProxySeller`);
+        throw new HttpException('Package not found', 400);
+      }
+      if (!pkg.is_active) {
+        console.error(`[modifyProxyResident] Package ${data.package_key} is INACTIVE. expired_at: ${JSON.stringify(pkg.expired_at)}, traffic_left: ${pkg.traffic_left}`);
+        throw new HttpException('Package is not active. Please contact support.', 400);
+      }
+      console.log(`[modifyProxyResident] Package is active. expired_at: ${JSON.stringify(pkg.expired_at)}, traffic_left: ${pkg.traffic_left}`);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      console.error('[modifyProxyResident] Error checking package status:', error.message);
+    }
+
     // Build geo object, only including non-empty fields
     const geo: Record<string, string> = {};
     if (data.geo?.country) geo.country = data.geo.country;
@@ -1126,12 +1158,16 @@ export class ProductService {
       requestBody.geo = geo;
     }
 
+    console.log('[modifyProxyResident] Sending to ProxySeller:', JSON.stringify(requestBody));
     const response = await this.proxySeller.post('residentsubuser/list/add', requestBody);
+    console.log('[modifyProxyResident] ProxySeller response:', JSON.stringify(response.data));
 
     if (response.data.status !== 'success') {
+      console.error('[modifyProxyResident] ProxySeller error:', JSON.stringify(response.data));
       throw new HttpException(response.data.errors[0].message, 400);
     }
 
+    console.log('[modifyProxyResident] Success');
     return {
       status: 'success',
     };

@@ -1104,6 +1104,15 @@ export class ProductService {
     return { status: 'success' };
   }
   async modifyProxyResident(data: ModifyProxyResidentDto) {
+    console.log('[modifyProxyResident] Request payload:', JSON.stringify({
+      title: data.title,
+      rotation: data.rotation,
+      whitelist: data.whitelist,
+      ports: data.ports,
+      geo: data.geo,
+      package_key: data.package_key,
+    }));
+
     const response = await this.proxySeller.post('residentsubuser/list/add', {
       title: data.title,
       rotation: data.rotation,
@@ -1119,6 +1128,8 @@ export class ProductService {
       },
       package_key: data.package_key,
     });
+
+    console.log('[modifyProxyResident] ProxySeller response:', JSON.stringify(response.data));
 
     if (response.data.status !== 'success') {
       console.log(response.data);

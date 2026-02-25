@@ -36,23 +36,6 @@ export class ProductService {
     });
   }
 
-  async debugResidentPackages() {
-    try {
-      const apiKey = this.configService.get<string>('PROXY_SELLER');
-      const response = await this.proxySeller.get('/residentsubuser/packages');
-      return {
-        apiKeyPresent: !!apiKey,
-        apiKeyPrefix: apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING',
-        packagesResponse: response.data,
-      };
-    } catch (error) {
-      return {
-        error: error.message,
-        response: error.response?.data,
-      };
-    }
-  }
-
   async addAuth(orderNumber: string | number, ip: string) {
     try {
       const parts = ip.split('.');
@@ -799,7 +782,6 @@ export class ProductService {
 
         const traffic = await this.proxySeller.get(`/residentsubuser/packages`);
         const packages = traffic.data.data || [];
-        console.log('[getActiveProxyList] resident packages:', JSON.stringify(packages));
 
         const proxySellerIds = orders.map((order) => order.proxySellerId);
         for (const proxySellerId of proxySellerIds) {
@@ -813,7 +795,6 @@ export class ProductService {
           const foundPackage = packages.find(
             (p) => p.package_key === proxySellerId,
           );
-          console.log(`[getActiveProxyList] foundPackage for ${proxySellerId}:`, JSON.stringify(foundPackage));
 
           result.push({
             package_info: foundPackage,
@@ -1123,35 +1104,31 @@ export class ProductService {
     return { status: 'success' };
   }
   async modifyProxyResident(data: ModifyProxyResidentDto) {
-    console.log('[modifyProxyResident] Request payload:', JSON.stringify({
-      title: data.title,
-      rotation: data.rotation,
-      whitelist: data.whitelist,
-      ports: data.ports,
-      geo: data.geo,
-      package_key: data.package_key,
-    }));
+    // Build geo object, only including non-empty fields
+    const geo: Record<string, string> = {};
+    if (data.geo?.country) geo.country = data.geo.country;
+    if (data.geo?.region) geo.region = data.geo.region;
+    if (data.geo?.city) geo.city = data.geo.city;
+    if (data.geo?.isp) geo.isp = data.geo.isp;
 
-    const response = await this.proxySeller.post('residentsubuser/list/add', {
+    const requestBody: Record<string, any> = {
       title: data.title,
       rotation: data.rotation,
       whitelist: data.whitelist,
       export: {
         ports: data.ports,
       },
-      geo: {
-        country: data.geo.country,
-        region: data.geo.region,
-        city: data.geo.city,
-        isp: data.geo.isp,
-      },
       package_key: data.package_key,
-    });
+    };
 
-    console.log('[modifyProxyResident] ProxySeller response:', JSON.stringify(response.data));
+    // Only add geo if at least one field is set
+    if (Object.keys(geo).length > 0) {
+      requestBody.geo = geo;
+    }
+
+    const response = await this.proxySeller.post('residentsubuser/list/add', requestBody);
 
     if (response.data.status !== 'success') {
-      console.log(response.data);
       throw new HttpException(response.data.errors[0].message, 400);
     }
 

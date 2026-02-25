@@ -66,6 +66,11 @@ export class ProductController {
     return await this.productService.getActiveProxyList(userId, type);
   }
 
+  @Get('/debug/resident-packages')
+  async debugResidentPackages() {
+    return await this.productService.debugResidentPackages();
+  }
+
   @Post('/modify-proxy/resident')
   async modifyResidentProxy(@Body() body: ModifyProxyResidentDto) {
     return await this.productService.modifyProxyResident(body);

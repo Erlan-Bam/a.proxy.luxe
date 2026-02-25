@@ -36,6 +36,23 @@ export class ProductService {
     });
   }
 
+  async debugResidentPackages() {
+    try {
+      const apiKey = this.configService.get<string>('PROXY_SELLER');
+      const response = await this.proxySeller.get('/residentsubuser/packages');
+      return {
+        apiKeyPresent: !!apiKey,
+        apiKeyPrefix: apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING',
+        packagesResponse: response.data,
+      };
+    } catch (error) {
+      return {
+        error: error.message,
+        response: error.response?.data,
+      };
+    }
+  }
+
   async addAuth(orderNumber: string | number, ip: string) {
     try {
       const parts = ip.split('.');

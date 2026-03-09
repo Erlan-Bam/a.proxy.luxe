@@ -65,13 +65,14 @@ export class PaymentService {
     method: string,
     inv?: number,
   ) {
-    if (method === 'DIGISELLER') {
+    // Universal duplicate check by inv for all payment methods
+    if (inv != null) {
       const foundByInv = await this.prisma.payment.findFirst({
-        where: { inv },
+        where: { inv, method },
       });
       if (foundByInv) {
         console.log(
-          '✅ Payment already exists by inv, skipping...',
+          `✅ [${method}] Payment already exists by inv=${inv}, skipping...`,
           'payment=',
           foundByInv,
         );

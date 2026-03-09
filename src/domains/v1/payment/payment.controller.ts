@@ -64,6 +64,13 @@ export class PaymentController {
         .status(200)
         .send({ message: 'Payment received but no data provided.' });
     }
+
+    // WebMoney sends a pre-request (LMI_PREREQUEST=1) before the actual payment notification.
+    // We must respond 200 OK but NOT process any payment.
+    if (body.LMI_PREREQUEST === '1') {
+      return res.status(200).send('YES');
+    }
+
     const {
       LMI_PAYEE_PURSE,
       LMI_PAYMENT_AMOUNT,
@@ -102,7 +109,14 @@ export class PaymentController {
     if (!userId || !amount) {
       return res.status(400).send({ message: 'Invalid payment data' });
     }
-    await this.paymentService.successfulPayment(userId, amount, 'WEBMONEY');
+
+    const wmTransNo = LMI_SYS_TRANS_NO ? Number(LMI_SYS_TRANS_NO) : undefined;
+    await this.paymentService.successfulPayment(
+      userId,
+      amount,
+      'WEBMONEY',
+      wmTransNo,
+    );
 
     return res
       .status(200)

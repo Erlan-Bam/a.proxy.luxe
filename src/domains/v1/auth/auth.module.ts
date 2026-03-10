@@ -17,9 +17,9 @@ import { SharedModule } from '../shared/shared.module';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_ACCESS_TOKEN_SECRET'),
         signOptions: {
-          expiresIn: configService.get<string>(
-            'JWT_ACCESS_TOKEN_EXPIRATION_TIME',
-          ),
+          expiresIn:
+            (configService.get<string>('JWT_ACCESS_TOKEN_EXPIRATION_TIME') as any) ||
+            '1d',
         },
       }),
     }),

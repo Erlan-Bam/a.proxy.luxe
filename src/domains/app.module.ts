@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { UserModule } from './v1/user/user.module';
 import { AuthModule } from './v1/auth/auth.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -11,6 +12,7 @@ import { PaymentModule } from './v1/payment/payment.module';
 import { SharedModule } from './v1/shared/shared.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HealthModule } from './health/health.module';
+import { AdminLoggingInterceptor } from './v1/shared/interceptors/admin-logging.interceptor';
 
 @Module({
   imports: [
@@ -30,6 +32,12 @@ import { HealthModule } from './health/health.module';
     PaymentModule,
     SharedModule,
     HealthModule,
+  ],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AdminLoggingInterceptor,
+    },
   ],
 })
 export class AppModule {}

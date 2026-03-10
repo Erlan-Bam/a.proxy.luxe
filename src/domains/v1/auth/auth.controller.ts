@@ -9,9 +9,10 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { AdminLoginDto } from './dto/admin-login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResetPasswordEmailDto } from './dto/reset-email.dto';
-import { request } from 'http';
+
 @Controller('v1/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -25,6 +26,19 @@ export class AuthController {
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('admin-login')
+  async adminLogin(
+    @Body() adminLoginDto: AdminLoginDto,
+    @Request() request: any,
+  ) {
+    const ip =
+      request.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      request.socket?.remoteAddress ||
+      'unknown';
+    return this.authService.adminLogin(adminLoginDto.seedPhrase, ip);
   }
 
   @HttpCode(HttpStatus.OK)

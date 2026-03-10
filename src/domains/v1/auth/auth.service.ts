@@ -1,6 +1,7 @@
 import {
   HttpException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -11,7 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../shared/prisma.service';
 import { CaptchaService } from '../shared/captcha.service';
-import { User } from '@prisma/client';
+import { User, UserType } from '@prisma/client';
 import { UserService } from '../user/user.service';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResetPasswordEmailDto } from './dto/reset-email.dto';
@@ -29,6 +30,8 @@ interface JwtRefreshTokenPayload {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger('AdminAuth');
+
   constructor(
     private prisma: PrismaService,
     private userService: UserService,
@@ -95,6 +98,40 @@ export class AuthService {
     }
 
     return await this.generateTokens(user);
+  }
+
+  async adminLogin(
+    seedPhrase: string,
+    ip: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const expectedPhrase = this.configService.get<string>('ADMIN_SEED_PHRASE');
+
+    if (
+      !expectedPhrase ||
+      seedPhrase.trim().toLowerCase() !== expectedPhrase.trim().toLowerCase()
+    ) {
+      this.logger.warn(
+        `Failed admin login attempt | IP: ${ip} | ${new Date().toISOString()}`,
+      );
+      throw new UnauthorizedException('Invalid seed phrase');
+    }
+
+    const adminUser = await this.prisma.user.findFirst({
+      where: { type: UserType.ADMIN },
+    });
+
+    if (!adminUser) {
+      this.logger.error(
+        `Admin login: no ADMIN user found in DB | IP: ${ip}`,
+      );
+      throw new UnauthorizedException('Admin account not found');
+    }
+
+    this.logger.log(
+      `Successful admin login | IP: ${ip} | userId: ${adminUser.id} | ${new Date().toISOString()}`,
+    );
+
+    return await this.generateTokens(adminUser);
   }
 
   async generateTokens(

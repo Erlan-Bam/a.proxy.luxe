@@ -1,12 +1,13 @@
 // prisma/dedupe-payments.ts
 //
-// Removes duplicate Payment rows that share the same (inv, method), keeps the
-// OLDEST payment per group, and reverses the user-balance credits that came
-// from the extra rows. Runs in a single transaction so it is all-or-nothing.
+// Removes duplicate Payment rows that share the same (inv, method), keeping
+// the OLDEST row per group. Balances are NOT modified — every user keeps
+// whatever balance they currently have. The full price of each deleted
+// duplicate is effectively a write-off.
 //
 // Usage:
 //   yarn ts-node prisma/dedupe-payments.ts           # dry run (no writes)
-//   yarn ts-node prisma/dedupe-payments.ts --apply   # actually mutate data
+//   yarn ts-node prisma/dedupe-payments.ts --apply   # actually delete rows
 //
 // IMPORTANT: Take a DB backup before running with --apply.
 
@@ -15,23 +16,15 @@ import { PrismaClient, Prisma } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const APPLY = process.argv.includes('--apply');
-const ALLOW_NEGATIVE = process.argv.includes('--allow-negative');
-const CLAMP_ZERO = process.argv.includes('--clamp-zero');
-// Leave balance untouched for users where the refund would drive it negative —
-// duplicate rows are still deleted, but the user keeps the full double-credit
-// as a write-off. Use this when users have already spent the extra balance.
-const KEEP_BALANCE_IF_NEGATIVE = process.argv.includes(
-  '--keep-balance-if-negative',
-);
 
 interface DuplicateGroup {
   inv: number;
   method: string;
   copies: number;
+  userId: string;
   keepId: string;
   deleteIds: string[];
-  userId: string;
-  refundAmount: Prisma.Decimal;
+  writeOff: Prisma.Decimal;
 }
 
 async function findDuplicateGroups(): Promise<DuplicateGroup[]> {
@@ -50,10 +43,10 @@ async function findDuplicateGroups(): Promise<DuplicateGroup[]> {
         inv: row.inv as number,
         method: row.method,
         copies: 1,
+        userId: row.userId,
         keepId: row.id,
         deleteIds: [],
-        userId: row.userId,
-        refundAmount: new Prisma.Decimal(0),
+        writeOff: new Prisma.Decimal(0),
       });
       continue;
     }
@@ -67,50 +60,10 @@ async function findDuplicateGroups(): Promise<DuplicateGroup[]> {
 
     existing.copies += 1;
     existing.deleteIds.push(row.id);
-    existing.refundAmount = existing.refundAmount.plus(row.price);
+    existing.writeOff = existing.writeOff.plus(row.price);
   }
 
   return [...groups.values()].filter((g) => g.copies > 1);
-}
-
-async function checkBalanceImpact(groups: DuplicateGroup[]) {
-  const refundByUser = new Map<string, Prisma.Decimal>();
-  for (const g of groups) {
-    const current = refundByUser.get(g.userId) ?? new Prisma.Decimal(0);
-    refundByUser.set(g.userId, current.plus(g.refundAmount));
-  }
-
-  const users = await prisma.user.findMany({
-    where: { id: { in: [...refundByUser.keys()] } },
-    select: { id: true, balance: true, email: true },
-  });
-
-  const impact = users.map((u) => {
-    const refund = refundByUser.get(u.id) as Prisma.Decimal;
-    const wouldBeAfter = u.balance.minus(refund);
-    const goesNegative = wouldBeAfter.lt(0);
-    // When clamping, the effective refund is capped to the current balance —
-    // the user can't be driven below zero; the difference is written off.
-    const effectiveRefund =
-      goesNegative && KEEP_BALANCE_IF_NEGATIVE
-        ? new Prisma.Decimal(0)
-        : goesNegative && CLAMP_ZERO
-          ? u.balance
-          : refund;
-    const after = u.balance.minus(effectiveRefund);
-    return {
-      userId: u.id,
-      email: u.email,
-      balance: u.balance,
-      refund,
-      effectiveRefund,
-      writeOff: refund.minus(effectiveRefund),
-      after,
-      goesNegative,
-    };
-  });
-
-  return impact;
 }
 
 async function main() {
@@ -124,90 +77,35 @@ async function main() {
   }
 
   console.log(`Found ${groups.length} duplicate groups:\n`);
+  let totalWriteOff = new Prisma.Decimal(0);
+  let totalToDelete = 0;
   for (const g of groups) {
+    totalWriteOff = totalWriteOff.plus(g.writeOff);
+    totalToDelete += g.deleteIds.length;
     console.log(
       `  inv=${g.inv} method=${g.method} copies=${g.copies} ` +
-        `user=${g.userId} refund=${g.refundAmount.toString()} ` +
+        `user=${g.userId} write_off=${g.writeOff.toString()} ` +
         `keep=${g.keepId} delete=[${g.deleteIds.join(', ')}]`,
     );
   }
 
-  console.log('\n=== Balance impact ===\n');
-  const impact = await checkBalanceImpact(groups);
-  for (const row of impact) {
-    const flag = row.goesNegative
-      ? KEEP_BALANCE_IF_NEGATIVE
-        ? `kept (write-off ${row.writeOff.toString()}, balance untouched)`
-        : CLAMP_ZERO
-          ? `clamped (write-off ${row.writeOff.toString()})`
-          : '⚠️  NEGATIVE'
-      : 'ok';
-    console.log(
-      `  user=${row.userId} (${row.email}) ` +
-        `balance=${row.balance.toString()} - ${row.effectiveRefund.toString()} ` +
-        `= ${row.after.toString()}  [${flag}]`,
-    );
-  }
-
-  const negatives = impact.filter((r) => r.goesNegative);
-  if (
-    negatives.length > 0 &&
-    !ALLOW_NEGATIVE &&
-    !CLAMP_ZERO &&
-    !KEEP_BALANCE_IF_NEGATIVE
-  ) {
-    console.error(
-      `\n❌ ${negatives.length} user(s) would go to a negative balance. Pick one:\n` +
-        `    --keep-balance-if-negative  leave balance alone, delete dupes, write off full refund\n` +
-        `    --clamp-zero                 reduce balance to 0, write off the remainder\n` +
-        `    --allow-negative             actually let balance go below zero`,
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  if (CLAMP_ZERO || KEEP_BALANCE_IF_NEGATIVE) {
-    const totalWriteOff = impact.reduce(
-      (sum, r) => sum.plus(r.writeOff),
-      new Prisma.Decimal(0),
-    );
-    const mode = KEEP_BALANCE_IF_NEGATIVE ? '--keep-balance-if-negative' : '--clamp-zero';
-    console.log(
-      `\nℹ️  ${mode}: total write-off = ${totalWriteOff.toString()} across ` +
-        `${negatives.length} user(s).`,
-    );
-  }
+  console.log(
+    `\nTotals: rows_to_delete=${totalToDelete}, write_off=${totalWriteOff.toString()} ` +
+      `(balances untouched).`,
+  );
 
   if (!APPLY) {
     console.log(
-      '\nℹ️  Dry run complete. Re-run with --apply to mutate the database.',
+      '\nℹ️  Dry run complete. Re-run with --apply to delete the duplicate rows.',
     );
     return;
   }
 
   console.log('\n=== Applying changes in a single transaction ===\n');
 
-  // Use the impact table as the source of truth — it already applied --clamp-zero.
-  const refundByUser = new Map<string, Prisma.Decimal>();
-  for (const r of impact) {
-    refundByUser.set(r.userId, r.effectiveRefund);
-  }
-  const allDeleteIds: string[] = [];
-  for (const g of groups) {
-    allDeleteIds.push(...g.deleteIds);
-  }
+  const allDeleteIds = groups.flatMap((g) => g.deleteIds);
 
   const result = await prisma.$transaction(async (tx) => {
-    let balanceUpdates = 0;
-    for (const [userId, refund] of refundByUser) {
-      if (refund.isZero()) continue;
-      await tx.user.update({
-        where: { id: userId },
-        data: { balance: { decrement: refund } },
-      });
-      balanceUpdates += 1;
-    }
-
     const deleted = await tx.payment.deleteMany({
       where: { id: { in: allDeleteIds } },
     });
@@ -226,12 +124,10 @@ async function main() {
       );
     }
 
-    return { balanceUpdates, deleted: deleted.count };
+    return { deleted: deleted.count };
   });
 
-  console.log(
-    `✅ Done. users_updated=${result.balanceUpdates} rows_deleted=${result.deleted}`,
-  );
+  console.log(`✅ Done. rows_deleted=${result.deleted}`);
   console.log(
     '\nNow re-run:  yarn prisma db push   to add the @@unique([inv, method]) constraint.',
   );

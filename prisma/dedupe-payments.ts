@@ -17,6 +17,12 @@ const prisma = new PrismaClient();
 const APPLY = process.argv.includes('--apply');
 const ALLOW_NEGATIVE = process.argv.includes('--allow-negative');
 const CLAMP_ZERO = process.argv.includes('--clamp-zero');
+// Leave balance untouched for users where the refund would drive it negative —
+// duplicate rows are still deleted, but the user keeps the full double-credit
+// as a write-off. Use this when users have already spent the extra balance.
+const KEEP_BALANCE_IF_NEGATIVE = process.argv.includes(
+  '--keep-balance-if-negative',
+);
 
 interface DuplicateGroup {
   inv: number;
@@ -85,7 +91,12 @@ async function checkBalanceImpact(groups: DuplicateGroup[]) {
     const goesNegative = wouldBeAfter.lt(0);
     // When clamping, the effective refund is capped to the current balance —
     // the user can't be driven below zero; the difference is written off.
-    const effectiveRefund = CLAMP_ZERO && goesNegative ? u.balance : refund;
+    const effectiveRefund =
+      goesNegative && KEEP_BALANCE_IF_NEGATIVE
+        ? new Prisma.Decimal(0)
+        : goesNegative && CLAMP_ZERO
+          ? u.balance
+          : refund;
     const after = u.balance.minus(effectiveRefund);
     return {
       userId: u.id,

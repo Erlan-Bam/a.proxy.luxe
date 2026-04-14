@@ -16,6 +16,7 @@ const prisma = new PrismaClient();
 
 const APPLY = process.argv.includes('--apply');
 const ALLOW_NEGATIVE = process.argv.includes('--allow-negative');
+const CLAMP_ZERO = process.argv.includes('--clamp-zero');
 
 interface DuplicateGroup {
   inv: number;
@@ -80,14 +81,21 @@ async function checkBalanceImpact(groups: DuplicateGroup[]) {
 
   const impact = users.map((u) => {
     const refund = refundByUser.get(u.id) as Prisma.Decimal;
-    const after = u.balance.minus(refund);
+    const wouldBeAfter = u.balance.minus(refund);
+    const goesNegative = wouldBeAfter.lt(0);
+    // When clamping, the effective refund is capped to the current balance —
+    // the user can't be driven below zero; the difference is written off.
+    const effectiveRefund = CLAMP_ZERO && goesNegative ? u.balance : refund;
+    const after = u.balance.minus(effectiveRefund);
     return {
       userId: u.id,
       email: u.email,
       balance: u.balance,
       refund,
+      effectiveRefund,
+      writeOff: refund.minus(effectiveRefund),
       after,
-      goesNegative: after.lt(0),
+      goesNegative,
     };
   });
 
@@ -116,22 +124,38 @@ async function main() {
   console.log('\n=== Balance impact ===\n');
   const impact = await checkBalanceImpact(groups);
   for (const row of impact) {
-    const flag = row.goesNegative ? '⚠️  NEGATIVE' : 'ok';
+    const flag = row.goesNegative
+      ? CLAMP_ZERO
+        ? `clamped (write-off ${row.writeOff.toString()})`
+        : '⚠️  NEGATIVE'
+      : 'ok';
     console.log(
       `  user=${row.userId} (${row.email}) ` +
-        `balance=${row.balance.toString()} - ${row.refund.toString()} ` +
+        `balance=${row.balance.toString()} - ${row.effectiveRefund.toString()} ` +
         `= ${row.after.toString()}  [${flag}]`,
     );
   }
 
   const negatives = impact.filter((r) => r.goesNegative);
-  if (negatives.length > 0 && !ALLOW_NEGATIVE) {
+  if (negatives.length > 0 && !ALLOW_NEGATIVE && !CLAMP_ZERO) {
     console.error(
       `\n❌ ${negatives.length} user(s) would go to a negative balance. ` +
-        `Review above, then re-run with --allow-negative to proceed anyway.`,
+        `Re-run with --clamp-zero (write off the excess) or --allow-negative ` +
+        `(let balance go below zero).`,
     );
     process.exitCode = 1;
     return;
+  }
+
+  if (CLAMP_ZERO) {
+    const totalWriteOff = impact.reduce(
+      (sum, r) => sum.plus(r.writeOff),
+      new Prisma.Decimal(0),
+    );
+    console.log(
+      `\nℹ️  --clamp-zero: total write-off = ${totalWriteOff.toString()} across ` +
+        `${negatives.length} user(s).`,
+    );
   }
 
   if (!APPLY) {
@@ -143,11 +167,13 @@ async function main() {
 
   console.log('\n=== Applying changes in a single transaction ===\n');
 
+  // Use the impact table as the source of truth — it already applied --clamp-zero.
   const refundByUser = new Map<string, Prisma.Decimal>();
+  for (const r of impact) {
+    refundByUser.set(r.userId, r.effectiveRefund);
+  }
   const allDeleteIds: string[] = [];
   for (const g of groups) {
-    const current = refundByUser.get(g.userId) ?? new Prisma.Decimal(0);
-    refundByUser.set(g.userId, current.plus(g.refundAmount));
     allDeleteIds.push(...g.deleteIds);
   }
 

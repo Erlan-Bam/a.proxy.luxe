@@ -200,6 +200,7 @@ async function main() {
   const result = await prisma.$transaction(async (tx) => {
     let balanceUpdates = 0;
     for (const [userId, refund] of refundByUser) {
+      if (refund.isZero()) continue;
       await tx.user.update({
         where: { id: userId },
         data: { balance: { decrement: refund } },

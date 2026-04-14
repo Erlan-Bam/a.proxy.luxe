@@ -136,9 +136,11 @@ async function main() {
   const impact = await checkBalanceImpact(groups);
   for (const row of impact) {
     const flag = row.goesNegative
-      ? CLAMP_ZERO
-        ? `clamped (write-off ${row.writeOff.toString()})`
-        : '⚠️  NEGATIVE'
+      ? KEEP_BALANCE_IF_NEGATIVE
+        ? `kept (write-off ${row.writeOff.toString()}, balance untouched)`
+        : CLAMP_ZERO
+          ? `clamped (write-off ${row.writeOff.toString()})`
+          : '⚠️  NEGATIVE'
       : 'ok';
     console.log(
       `  user=${row.userId} (${row.email}) ` +
@@ -148,23 +150,30 @@ async function main() {
   }
 
   const negatives = impact.filter((r) => r.goesNegative);
-  if (negatives.length > 0 && !ALLOW_NEGATIVE && !CLAMP_ZERO) {
+  if (
+    negatives.length > 0 &&
+    !ALLOW_NEGATIVE &&
+    !CLAMP_ZERO &&
+    !KEEP_BALANCE_IF_NEGATIVE
+  ) {
     console.error(
-      `\n❌ ${negatives.length} user(s) would go to a negative balance. ` +
-        `Re-run with --clamp-zero (write off the excess) or --allow-negative ` +
-        `(let balance go below zero).`,
+      `\n❌ ${negatives.length} user(s) would go to a negative balance. Pick one:\n` +
+        `    --keep-balance-if-negative  leave balance alone, delete dupes, write off full refund\n` +
+        `    --clamp-zero                 reduce balance to 0, write off the remainder\n` +
+        `    --allow-negative             actually let balance go below zero`,
     );
     process.exitCode = 1;
     return;
   }
 
-  if (CLAMP_ZERO) {
+  if (CLAMP_ZERO || KEEP_BALANCE_IF_NEGATIVE) {
     const totalWriteOff = impact.reduce(
       (sum, r) => sum.plus(r.writeOff),
       new Prisma.Decimal(0),
     );
+    const mode = KEEP_BALANCE_IF_NEGATIVE ? '--keep-balance-if-negative' : '--clamp-zero';
     console.log(
-      `\nℹ️  --clamp-zero: total write-off = ${totalWriteOff.toString()} across ` +
+      `\nℹ️  ${mode}: total write-off = ${totalWriteOff.toString()} across ` +
         `${negatives.length} user(s).`,
     );
   }

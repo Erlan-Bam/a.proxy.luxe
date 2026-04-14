@@ -139,6 +139,8 @@ model Payment {
   inv             Int?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
+  @@unique([inv, method])
 }
 
 model PartnerTransaction {

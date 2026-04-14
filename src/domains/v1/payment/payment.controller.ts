@@ -110,12 +110,14 @@ export class PaymentController {
       return res.status(400).send({ message: 'Invalid payment data' });
     }
 
-    const wmTransNo = LMI_SYS_TRANS_NO ? Number(LMI_SYS_TRANS_NO) : undefined;
+    // LMI_PAYMENT_NO is merchant-assigned and always present; use it as the
+    // idempotency key so duplicate WebMoney webhook deliveries cannot double-credit.
+    const wmPaymentNo = LMI_PAYMENT_NO ? Number(LMI_PAYMENT_NO) : undefined;
     await this.paymentService.successfulPayment(
       userId,
       amount,
       'WEBMONEY',
-      wmTransNo,
+      wmPaymentNo,
     );
 
     return res

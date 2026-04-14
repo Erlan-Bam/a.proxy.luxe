@@ -65,21 +65,6 @@ export class PaymentService {
     method: string,
     inv?: number,
   ) {
-    // Universal duplicate check by inv for all payment methods
-    if (inv != null) {
-      const foundByInv = await this.prisma.payment.findFirst({
-        where: { inv, method },
-      });
-      if (foundByInv) {
-        console.log(
-          `✅ [${method}] Payment already exists by inv=${inv}, skipping...`,
-          'payment=',
-          foundByInv,
-        );
-        return foundByInv;
-      }
-    }
-
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -94,14 +79,38 @@ export class PaymentService {
       );
     }
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { balance: { increment: amount } },
-    });
-
-    return await this.prisma.payment.create({
-      data: { userId: userId, price: amount, method: method, inv: inv },
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.create({
+          data: { userId, price: amount, method, inv },
+        });
+        await tx.user.update({
+          where: { id: userId },
+          data: { balance: { increment: amount } },
+        });
+        return payment;
+      });
+    } catch (error: unknown) {
+      // P2002 = unique constraint violation on (inv, method) — duplicate webhook delivery.
+      // Safe to treat as idempotent: return the original payment without crediting again.
+      if (
+        inv != null &&
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
+        const existing = await this.prisma.payment.findFirst({
+          where: { inv, method },
+        });
+        console.log(
+          `✅ [${method}] Duplicate webhook for inv=${inv}, skipping credit.`,
+          'payment=',
+          existing,
+        );
+        return existing;
+      }
+      throw error;
+    }
   }
 
   async getPaymentHistory(userId: string) {

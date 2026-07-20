@@ -967,8 +967,7 @@ export class UserService {
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #000000; border-radius: 10px; overflow: hidden; color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
                   <tr>
                     <td align="center" style="padding: 25px 0; border-bottom: 2px solid #f3d675;">
-                      <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" alt="Logo" width="36" height="36" style="vertical-align: middle; margin-right: 10px;" />
-                      <span style="font-size: 24px; font-weight: bold; color: #f3d675;">PROXY.LUXE</span>
+                      <img src="https://proxy.luxe/email-logo.png" alt="Proxy.Luxe" width="180" height="53" style="display: block; border: 0;" />
                     </td>
                   </tr>
 

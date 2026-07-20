@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { UserModule } from './v1/user/user.module';
 import { AuthModule } from './v1/auth/auth.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -13,6 +13,8 @@ import { SharedModule } from './v1/shared/shared.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HealthModule } from './health/health.module';
 import { AdminLoggingInterceptor } from './v1/shared/interceptors/admin-logging.interceptor';
+import { ErrorLogModule } from './v1/error-log/error-log.module';
+import { HttpErrorLoggingFilter } from './v1/error-log/http-error-logging.filter';
 
 @Module({
   imports: [
@@ -31,12 +33,17 @@ import { AdminLoggingInterceptor } from './v1/shared/interceptors/admin-logging.
     ServicesModule,
     PaymentModule,
     SharedModule,
+    ErrorLogModule,
     HealthModule,
   ],
   providers: [
     {
       provide: APP_INTERCEPTOR,
       useClass: AdminLoggingInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: HttpErrorLoggingFilter,
     },
   ],
 })

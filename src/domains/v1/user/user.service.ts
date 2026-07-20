@@ -10,7 +10,7 @@ import { AddPromocodeDTO } from './dto/add-promo.dto';
 import { SupportMessageDto } from './dto/send-support.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AddAuthDto } from './dto/add-auth.dto';
-import { ProductService } from 'src/domains/product/product.service';
+import { ProductService } from '../../product/product.service';
 import { PayoutPartner } from './dto/payout-partner.dto';
 import axios from 'axios';
 
@@ -314,23 +314,40 @@ export class UserService {
       balance: updatedUser.balance,
     };
   }
-  async getUsersInfo(user: User): Promise<Partial<User>[]> {
+  async getUsersInfo(user: User, page = 1, limit = 100) {
     if (user.type !== UserType.ADMIN) {
       throw new HttpException('Only admins can access this information', 403);
     }
 
-    return await this.prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        balance: true,
-        type: true,
-        isVerified: true,
-        createdAt: true,
-        ip: true,
-        isBanned: true,
-      },
-    });
+    const skip = (page - 1) * limit;
+    const select = {
+      id: true,
+      email: true,
+      balance: true,
+      type: true,
+      isVerified: true,
+      createdAt: true,
+      ip: true,
+      isBanned: true,
+    };
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        select,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.user.count(),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
   async addPartner(partnerId: string, userId: string) {
     const partner = await this.prisma.user.findUnique({
@@ -546,8 +563,12 @@ export class UserService {
   }
 
   async addPromocode(data: AddPromocodeDTO) {
-    let { user, promocode, discount, limit } = data;
-    let userId: string | undefined = undefined;
+    const { user } = data;
+    const promocode = data.promocode.trim().toUpperCase();
+
+    if (!promocode) {
+      throw new HttpException('Promo code is required', 400);
+    }
 
     if (user.type !== UserType.ADMIN) {
       const existingCoupon = await this.prisma.coupon.findFirst({
@@ -559,17 +580,29 @@ export class UserService {
       if (existingCoupon) {
         throw new HttpException('You already have an active promo code', 400);
       }
+      return this.prisma.coupon.create({
+        data: {
+          code: promocode,
+          discount: 5,
+          limit: 999999999,
+          userId: user.id,
+        },
+      });
     }
-    limit = 999999999;
-    discount = 5;
-    userId = user.id;
+
+    const existingCoupon = await this.prisma.coupon.findUnique({
+      where: { code: promocode },
+    });
+
+    if (existingCoupon) {
+      throw new HttpException('Promo code already exists', 409);
+    }
 
     return await this.prisma.coupon.create({
       data: {
         code: promocode,
-        discount: discount,
-        limit: limit,
-        userId: userId,
+        discount: data.discount ?? 5,
+        limit: data.limit ?? 100,
       },
     });
   }

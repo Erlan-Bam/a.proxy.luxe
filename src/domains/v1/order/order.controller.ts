@@ -55,12 +55,22 @@ export class OrderController {
     @Query('page') page = '1',
     @Query('limit') limit = '50',
   ) {
-    const pageNumber = parseInt(page, 10);
-    const limitNumber = parseInt(limit, 10);
+    const pageNumber = this.parsePage(page);
+    const limitNumber = this.parseLimit(limit);
     if (request.user.type !== UserType.ADMIN) {
       throw new ForbiddenException('Access denied: Admins only');
     }
     return this.orderService.generalLog(pageNumber, limitNumber);
+  }
+
+  private parsePage(value: string): number {
+    const page = Number.parseInt(value, 10);
+    return Number.isFinite(page) && page > 0 ? page : 1;
+  }
+
+  private parseLimit(value: string): number {
+    const limit = Number.parseInt(value, 10);
+    return Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 300) : 100;
   }
 
   @Get('admin/:userId')

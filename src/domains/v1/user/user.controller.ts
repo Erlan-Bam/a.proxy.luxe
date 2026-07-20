@@ -8,6 +8,7 @@ import {
   Delete,
   Param,
   Patch,
+  Query,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UserService } from './user.service';
@@ -79,9 +80,17 @@ export class UserController {
   }
 
   @Get('info')
-  @UseGuards(AuthGuard('jwt'))
-  async getUsersInfo(@Request() request) {
-    return this.userService.getUsersInfo(request.user);
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
+  async getUsersInfo(
+    @Request() request,
+    @Query('page') page = '1',
+    @Query('limit') limit = '100',
+  ) {
+    return this.userService.getUsersInfo(
+      request.user,
+      this.parsePage(page),
+      this.parseLimit(limit),
+    );
   }
 
   @Post('add-balance')
@@ -157,6 +166,16 @@ export class UserController {
   @UseGuards(AuthGuard('jwt'))
   async deletePromocode(@Request() req, @Param('code') code: string) {
     return this.userService.deletePromocode(req.user, code);
+  }
+
+  private parsePage(value: string): number {
+    const page = Number.parseInt(value, 10);
+    return Number.isFinite(page) && page > 0 ? page : 1;
+  }
+
+  private parseLimit(value: string): number {
+    const limit = Number.parseInt(value, 10);
+    return Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 300) : 100;
   }
 
   @Delete('delete-list/:listId/:packageKey')

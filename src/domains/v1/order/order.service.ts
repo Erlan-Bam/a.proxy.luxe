@@ -116,7 +116,7 @@ export class OrderService {
     };
   }
 
-  async generalLog(page = 1, limit = 50) {
+  async generalLog(page = 1, limit = 100) {
     const skip = (page - 1) * limit;
 
     const [orders, totalOrders] = await this.prisma.$transaction([

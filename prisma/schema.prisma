@@ -163,3 +163,18 @@ model PartnerPayoutRequest {
 
   partner   User          @relation(fields: [partnerId], references: [id])
 }
+
+model ErrorLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  method     String
+  path       String
+  ip         String?
+  statusCode Int
+  message    String   @db.Text
+  stack      String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([statusCode])
+}

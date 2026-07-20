@@ -275,9 +275,8 @@ export class AuthService {
                                                 <td align="center">
                                                     <table border="0" cellpadding="0" cellspacing="0">
                                                         <tr>
-                                                            <td align="center" style="display: flex; align-items: center; justify-content: center;">
-                                                                <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="30px" height="30px" style="margin-right: 8px">
-                                                                <div style="font-size: 24px; font-weight: bold; color: #f3d675; letter-spacing: 1px;">PROXY.LUXE</div>
+                                                            <td align="center">
+                                                                <img src="https://proxy.luxe/email-logo.png" alt="Proxy.Luxe" width="180" height="53" style="display: block; border: 0;" />
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -381,9 +380,8 @@ export class AuthService {
                                             <td align="center">
                                                 <table border="0" cellpadding="0" cellspacing="0">
                                                     <tr>
-                                                        <td align="center" style="display: flex; align-items: center; justify-content: center;">
-                                                            <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="30px" height="30px" style="margin-right: 8px">
-                                                            <div style="font-size: 24px; font-weight: bold; color: #f3d675; letter-spacing: 1px;">PROXY.LUXE</div>
+                                                        <td align="center">
+                                                            <img src="https://proxy.luxe/email-logo.png" alt="Proxy.Luxe" width="180" height="53" style="display: block; border: 0;" />
                                                         </td>
                                                     </tr>
                                                 </table>

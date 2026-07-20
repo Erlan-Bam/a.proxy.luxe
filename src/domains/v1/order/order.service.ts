@@ -129,7 +129,7 @@ export class OrderService {
             },
           },
         },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),

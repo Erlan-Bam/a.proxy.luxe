@@ -53,14 +53,17 @@ describe('UserService promo codes', () => {
   });
 
   it('lets an admin delete a promo code by its code', async () => {
-    prisma.coupon.findFirst.mockResolvedValue({
+    prisma.coupon.findUnique.mockResolvedValue({
       code: 'SUMMER25',
       userId: null,
     });
     prisma.coupon.delete.mockResolvedValue({ code: 'SUMMER25' });
 
-    await service.deletePromocode(admin, 'SUMMER25');
+    await service.deletePromocode(admin, ' summer25 ');
 
+    expect(prisma.coupon.findUnique).toHaveBeenCalledWith({
+      where: { code: 'SUMMER25' },
+    });
     expect(prisma.coupon.delete).toHaveBeenCalledWith({
       where: { code: 'SUMMER25' },
     });

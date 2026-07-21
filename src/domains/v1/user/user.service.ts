@@ -743,10 +743,14 @@ export class UserService {
     return await this.prisma.coupon.findMany();
   }
   async deletePromocode(user: User, code: string) {
-    const coupon = await this.prisma.coupon.findFirst({
-      where: {
-        code: code,
-      },
+    const promocode = code.trim().toUpperCase();
+
+    if (!promocode) {
+      throw new HttpException('Promo code is required', 400);
+    }
+
+    const coupon = await this.prisma.coupon.findUnique({
+      where: { code: promocode },
     });
 
     if (!coupon) {
@@ -764,7 +768,7 @@ export class UserService {
     }
 
     return await this.prisma.coupon.delete({
-      where: { code: code },
+      where: { code: promocode },
     });
   }
 

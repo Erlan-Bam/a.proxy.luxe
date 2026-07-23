@@ -22,6 +22,7 @@ import { ModifyProxyResidentDto } from './dto/modify-proxy.dto';
 import { ProlongDto } from './dto/prolog.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { UpdateResident } from './dto/update-resident.dto';
+import { ProlongResidentDto } from './dto/prolong-resident.dto';
 
 @Injectable()
 export class ProductService {
@@ -718,11 +719,20 @@ export class ProductService {
     try {
       const orders = await this.prisma.order.findMany({
         where: { userId, proxySellerId: { not: null } },
-        select: { proxySellerId: true, id: true },
+        select: {
+          proxySellerId: true,
+          id: true,
+          tariff: true,
+          totalPrice: true,
+          end_date: true,
+        },
       });
 
       const proxySellerMap = new Map(
         orders.map((order) => [order.proxySellerId, order.id]),
+      );
+      const orderByProxySellerId = new Map(
+        orders.map((order) => [order.proxySellerId, order]),
       );
 
       if (type !== 'resident') {
@@ -803,12 +813,21 @@ export class ProductService {
           const foundPackage = packages.find(
             (p) => p.package_key === proxySellerId,
           );
+          const residentOrder = orderByProxySellerId.get(proxySellerId);
           console.log(`[getActiveProxyList] Package ${proxySellerId}: found=${!!foundPackage}, is_active=${foundPackage?.is_active}, expired_at=${JSON.stringify(foundPackage?.expired_at)}, traffic_left=${foundPackage?.traffic_left}`);
 
           result.push({
             package_info: foundPackage,
             package_list: response.data.data ?? null,
-            orderId: proxySellerMap.get(proxySellerId),
+            orderId: residentOrder?.id,
+            tariff: residentOrder?.tariff,
+            prolong_price: residentOrder
+              ? Number(residentOrder.totalPrice)
+              : undefined,
+            date_end:
+              foundPackage?.expired_at?.date ??
+              foundPackage?.expired_at ??
+              residentOrder?.end_date,
           });
         }
 
@@ -1113,6 +1132,156 @@ export class ProductService {
     });
     return { status: 'success' };
   }
+
+  async prolongResident(data: ProlongResidentDto) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: data.orderId,
+        userId: data.user.id,
+        type: Proxy.resident,
+        status: 'PAID',
+        proxySellerId: data.packageKey,
+      },
+    });
+
+    if (!order) {
+      throw new HttpException('Resident order not found', 404);
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.user.id },
+    });
+    if (!user) {
+      throw new HttpException('User not found', 404);
+    }
+
+    if (!order.tariff) {
+      throw new HttpException('Invalid resident tariff', 400);
+    }
+
+    const tariffName = order.tariff;
+    const tariffGb = Number.parseInt(tariffName, 10);
+    if (!Number.isFinite(tariffGb)) {
+      throw new HttpException('Invalid resident tariff', 400);
+    }
+
+    const currentPrice = await this.getCalcForOrder(
+      Proxy.resident,
+      tariffGb,
+    );
+    if (new Decimal(user.balance).lt(currentPrice)) {
+      throw new HttpException('Insufficient balance', 400);
+    }
+
+    const reference = await this.getProductReferenceByType(Proxy.resident);
+    if (reference.status !== 'success') {
+      throw new HttpException(reference.message, 400);
+    }
+
+    const tariff = reference.tariffs?.find(
+      (item) =>
+        item.name.toLowerCase() === tariffName.toLowerCase() &&
+        item.personal,
+    );
+    if (!tariff) {
+      throw new HttpException('Resident tariff not found', 400);
+    }
+
+    const packagesResponse = await this.proxySeller.get(
+      '/residentsubuser/packages',
+    );
+    const residentPackage = packagesResponse.data.data?.find(
+      (item) => item.package_key === data.packageKey,
+    );
+    if (!residentPackage) {
+      throw new HttpException('Resident package not found', 404);
+    }
+
+    const tariffOrderResponse = await this.proxySeller.post('/order/make', {
+      tarifId: tariff.id,
+      paymentId: 1,
+    });
+    if (
+      tariffOrderResponse.data.status !== 'success' ||
+      !tariffOrderResponse.data.data?.orderId
+    ) {
+      throw new HttpException(
+        tariffOrderResponse.data.errors?.[0]?.message ||
+          'Failed to renew resident tariff',
+        400,
+      );
+    }
+
+    const addedTraffic = await this.convertToBytes(tariffName);
+    const currentTrafficLimit = Number(residentPackage.traffic_limit);
+    if (!Number.isFinite(currentTrafficLimit)) {
+      throw new HttpException('Invalid resident traffic limit', 400);
+    }
+
+    const newEndDate = await this.getOneMonthLaterFormatted();
+    const packageResponse = await this.proxySeller.post(
+      '/residentsubuser/update',
+      {
+        is_link_date: false,
+        rotation: residentPackage.rotation ?? 1,
+        traffic_limit: String(currentTrafficLimit + addedTraffic),
+        is_active: true,
+        expired_at: newEndDate,
+        package_key: data.packageKey,
+      },
+    );
+    if (
+      packageResponse.data.status !== 'success' ||
+      !packageResponse.data.data
+    ) {
+      throw new HttpException(
+        packageResponse.data.errors?.[0]?.message ||
+          'Failed to update resident package',
+        400,
+      );
+    }
+
+    const updatedUser = await this.prisma.$transaction(async (prisma) => {
+      const balance = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          balance: { decrement: currentPrice },
+        },
+      });
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { end_date: newEndDate },
+      });
+
+      await prisma.order.create({
+        data: {
+          type: order.type,
+          userId: order.userId,
+          country: order.country,
+          quantity: order.quantity,
+          periodDays: '1m',
+          proxyType: order.proxyType,
+          status: 'PAID',
+          goal: order.goal,
+          tariff: order.tariff,
+          totalPrice: currentPrice,
+          orderId: String(tariffOrderResponse.data.data.orderId),
+          end_date: newEndDate,
+        },
+      });
+
+      return balance;
+    });
+
+    return {
+      status: 'success',
+      price: currentPrice,
+      balance: Number(updatedUser.balance),
+      date_end: newEndDate,
+    };
+  }
+
   async modifyProxyResident(data: ModifyProxyResidentDto) {
     console.log('[modifyProxyResident] Called with:', JSON.stringify(data));
 

@@ -17,6 +17,7 @@ import { UserType } from '@prisma/client';
 import { ModifyProxyResidentDto } from './dto/modify-proxy.dto';
 import { ProlongDto } from './dto/prolog.dto';
 import { UpdateResident } from './dto/update-resident.dto';
+import { ProlongResidentDto } from './dto/prolong-resident.dto';
 
 @Controller('/v1/products')
 export class ProductController {
@@ -83,5 +84,15 @@ export class ProductController {
   async prolongProxy(@Body() body: ProlongDto, @Request() request) {
     body.user = request.user;
     return await this.productService.prolongProxy(body);
+  }
+
+  @Post('prolong/resident')
+  @UseGuards(AuthGuard('jwt'))
+  async prolongResident(
+    @Body() body: ProlongResidentDto,
+    @Request() request,
+  ) {
+    body.user = request.user;
+    return await this.productService.prolongResident(body);
   }
 }

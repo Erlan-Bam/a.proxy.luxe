@@ -160,6 +160,12 @@ export class AuthService {
       refreshTokenId,
     };
 
+    if (user.type === UserType.ADMIN) {
+      return this.jwtService.signAsync(payload, {
+        secret: this.configService.get('JWT_REFRESH_TOKEN_SECRET'),
+      });
+    }
+
     return this.jwtService.signAsync(payload, {
       secret: this.configService.get('JWT_REFRESH_TOKEN_SECRET'),
       expiresIn: '7d',

@@ -308,7 +308,8 @@ export class OrderService {
       // Phase 2: Call external API (not retryable — only called once)
       const placedOrder = await this.productService.placeOrder(orderInfo);
       const package_key = placedOrder.package_key,
-        externalOrderId = placedOrder.orderId;
+        externalOrderId = placedOrder.orderId,
+        orderNumber = placedOrder.orderNumber;
 
       // Phase 3: Retryable DB transaction (balance + order status + partner)
       const response = await this.executeWithRetry(() =>
@@ -335,6 +336,7 @@ export class OrderService {
                     package_key && !existingPK ? package_key : null,
                   status: 'PAID',
                   orderId: externalOrderId,
+                  orderNumber,
                 },
               });
             } else {
@@ -344,6 +346,7 @@ export class OrderService {
                   proxySellerId: externalOrderId,
                   status: 'PAID',
                   orderId: externalOrderId,
+                  orderNumber,
                 },
               });
             }

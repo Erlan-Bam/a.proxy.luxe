@@ -944,8 +944,8 @@ export class UserService {
     await transporter.sendMail(mailOptions);
     return { success: true };
   }
-  async addAuthorization(data: AddAuthDto) {
-    return await this.productService.addAuth(data.orderNumber, data.ip);
+  async addAuthorization(userId: string, data: AddAuthDto) {
+    return await this.productService.addAuth(userId, data.orderNumber, data.ip);
   }
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async notifyExpiringProxies() {

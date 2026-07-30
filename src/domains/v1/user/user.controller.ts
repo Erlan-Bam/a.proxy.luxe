@@ -59,8 +59,8 @@ export class UserController {
 
   @Post('add-auth')
   @UseGuards(AuthGuard('jwt'))
-  async addAuth(@Body() body: AddAuthDto) {
-    return await this.userService.addAuthorization(body);
+  async addAuth(@Body() body: AddAuthDto, @Request() request) {
+    return await this.userService.addAuthorization(request.user.id, body);
   }
 
   @Post('send-verification')

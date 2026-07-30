@@ -37,21 +37,95 @@ export class ProductService {
     });
   }
 
-  async addAuth(orderNumber: string | number, ip: string) {
+  async addAuth(userId: string, orderNumber: string, ip: string) {
     try {
-      const parts = ip.split('.');
-      if (parts.length === 4) {
-        await this.proxySeller.post('/auth/add/ip', {
-          orderNumber: orderNumber,
-          ip: ip,
+      const directOrder = await this.prisma.order.findFirst({
+        where: {
+          userId,
+          status: 'PAID',
+          orderNumber,
+        },
+        select: { id: true },
+      });
+
+      if (!directOrder) {
+        const ownedOrders = await this.prisma.order.findMany({
+          where: {
+            userId,
+            status: 'PAID',
+            type: { in: [Proxy.isp, Proxy.ipv6] },
+            proxySellerId: { not: null },
+          },
+          select: {
+            id: true,
+            proxySellerId: true,
+          },
         });
-      } else {
-        throw new Error('Invalid format');
+        const ownedOrderIds = new Map(
+          ownedOrders.map((order) => [String(order.proxySellerId), order.id]),
+        );
+        const proxyLists = await Promise.allSettled(
+          ['isp', 'ipv6'].map((type) =>
+            this.proxySeller.get(`/proxy/list/${type}`),
+          ),
+        );
+
+        let matchingOrderId: string | undefined;
+        for (const result of proxyLists) {
+          if (
+            result.status !== 'fulfilled' ||
+            result.value.data?.status !== 'success'
+          ) {
+            continue;
+          }
+
+          const matchingProxy = result.value.data?.data?.items?.find(
+            (item) =>
+              item.order_number === orderNumber &&
+              ownedOrderIds.has(String(item.order_id)),
+          );
+          if (matchingProxy) {
+            matchingOrderId = ownedOrderIds.get(String(matchingProxy.order_id));
+            break;
+          }
+        }
+
+        if (!matchingOrderId) {
+          throw new HttpException('Proxy order not found', 404);
+        }
+
+        await this.prisma.order.updateMany({
+          where: {
+            id: matchingOrderId,
+            orderNumber: null,
+          },
+          data: { orderNumber },
+        });
       }
 
-      return { status: 'success' };
+      const response = await this.proxySeller.post('/auth/add/ip', {
+        orderNumber,
+        ip,
+      });
+
+      if (response.data?.status !== 'success') {
+        throw new HttpException(
+          response.data?.errors?.[0]?.message ||
+            'Failed to create IP authorization',
+          400,
+        );
+      }
+
+      return {
+        status: 'success',
+        data: response.data.data,
+      };
     } catch (error) {
-      throw new HttpException('Something went wrong...', 500);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException('Failed to create IP authorization', 502);
     }
   }
 
@@ -718,10 +792,15 @@ export class ProductService {
 
     try {
       const orders = await this.prisma.order.findMany({
-        where: { userId, proxySellerId: { not: null } },
+        where: {
+          userId,
+          type: type as Proxy,
+          proxySellerId: { not: null },
+        },
         select: {
           proxySellerId: true,
           id: true,
+          orderNumber: true,
           tariff: true,
           totalPrice: true,
           end_date: true,
@@ -729,10 +808,10 @@ export class ProductService {
       });
 
       const proxySellerMap = new Map(
-        orders.map((order) => [order.proxySellerId, order.id]),
+        orders.map((order) => [String(order.proxySellerId), order.id]),
       );
       const orderByProxySellerId = new Map(
-        orders.map((order) => [order.proxySellerId, order]),
+        orders.map((order) => [String(order.proxySellerId), order]),
       );
 
       if (type !== 'resident') {
@@ -749,7 +828,7 @@ export class ProductService {
 
         const filteredItems =
           response.data.data.items
-            ?.filter((item) => proxySellerMap.has(item.order_id))
+            ?.filter((item) => proxySellerMap.has(String(item.order_id)))
             ?.map(
               ({
                 id,
@@ -778,10 +857,24 @@ export class ProductService {
                 order_number,
                 auth_ip,
                 can_prolong,
-                orderId: proxySellerMap.get(order_id),
+                orderId: proxySellerMap.get(String(order_id)),
                 date_end,
               }),
             ) ?? [];
+
+        await Promise.all(
+          filteredItems
+            .filter((item) => item.order_number && item.orderId)
+            .map((item) =>
+              this.prisma.order.updateMany({
+                where: {
+                  id: item.orderId,
+                  orderNumber: null,
+                },
+                data: { orderNumber: item.order_number },
+              }),
+            ),
+        );
 
         return {
           status: 'success',
@@ -790,23 +883,38 @@ export class ProductService {
       } else {
         const result: any[] = [];
 
-        console.log('[getActiveProxyList] Fetching resident packages from ProxySeller');
+        console.log(
+          '[getActiveProxyList] Fetching resident packages from ProxySeller',
+        );
         const traffic = await this.proxySeller.get(`/residentsubuser/packages`);
         const packages = traffic.data.data || [];
-        console.log(`[getActiveProxyList] Got ${packages.length} packages from ProxySeller`);
+        console.log(
+          `[getActiveProxyList] Got ${packages.length} packages from ProxySeller`,
+        );
 
-        const proxySellerIds = orders.map((order) => order.proxySellerId);
-        console.log(`[getActiveProxyList] User orders proxySellerIds:`, JSON.stringify(proxySellerIds));
+        const proxySellerIds = orders.map((order) =>
+          String(order.proxySellerId),
+        );
+        console.log(
+          `[getActiveProxyList] User orders proxySellerIds:`,
+          JSON.stringify(proxySellerIds),
+        );
 
         for (const proxySellerId of proxySellerIds) {
-          console.log(`[getActiveProxyList] Fetching lists for package_key: ${proxySellerId}`);
+          console.log(
+            `[getActiveProxyList] Fetching lists for package_key: ${proxySellerId}`,
+          );
           const response = await this.proxySeller.get(
             `/residentsubuser/lists?package_key=${proxySellerId}`,
           );
-          console.log(`[getActiveProxyList] Lists response for ${proxySellerId}: status=${response.data.status}, items=${response.data.data?.length ?? 0}`);
+          console.log(
+            `[getActiveProxyList] Lists response for ${proxySellerId}: status=${response.data.status}, items=${response.data.data?.length ?? 0}`,
+          );
 
           if (response.data.status !== 'success') {
-            console.warn(`[getActiveProxyList] Skipping ${proxySellerId} - status: ${response.data.status}`);
+            console.warn(
+              `[getActiveProxyList] Skipping ${proxySellerId} - status: ${response.data.status}`,
+            );
             continue;
           }
 
@@ -814,12 +922,15 @@ export class ProductService {
             (p) => p.package_key === proxySellerId,
           );
           const residentOrder = orderByProxySellerId.get(proxySellerId);
-          console.log(`[getActiveProxyList] Package ${proxySellerId}: found=${!!foundPackage}, is_active=${foundPackage?.is_active}, expired_at=${JSON.stringify(foundPackage?.expired_at)}, traffic_left=${foundPackage?.traffic_left}`);
+          console.log(
+            `[getActiveProxyList] Package ${proxySellerId}: found=${!!foundPackage}, is_active=${foundPackage?.is_active}, expired_at=${JSON.stringify(foundPackage?.expired_at)}, traffic_left=${foundPackage?.traffic_left}`,
+          );
 
           result.push({
             package_info: foundPackage,
             package_list: response.data.data ?? null,
             orderId: residentOrder?.id,
+            order_number: residentOrder?.orderNumber,
             tariff: residentOrder?.tariff,
             prolong_price: residentOrder
               ? Number(residentOrder.totalPrice)
@@ -831,7 +942,9 @@ export class ProductService {
           });
         }
 
-        console.log(`[getActiveProxyList] Returning ${result.length} resident items`);
+        console.log(
+          `[getActiveProxyList] Returning ${result.length} resident items`,
+        );
         return {
           status: 'success',
           data: { items: result },
@@ -895,8 +1008,19 @@ export class ProductService {
           '[PRODUCT.SERVICE] Non-resident response:',
           JSON.stringify(response.data, null, 2),
         );
+        if (
+          response.data?.status !== 'success' ||
+          !response.data?.data?.orderId
+        ) {
+          throw new HttpException(
+            response.data?.errors?.[0]?.message || 'Failed to place an order',
+            400,
+          );
+        }
+
         const result = {
           orderId: response.data.data.orderId.toString(),
+          orderNumber: response.data.data.listBaseOrderNumbers?.[0],
           package_key: undefined,
         };
         console.log('[PRODUCT.SERVICE] Returning non-resident result:', result);
@@ -915,6 +1039,19 @@ export class ProductService {
           '[PRODUCT.SERVICE] Tariff response:',
           JSON.stringify(tariffResponse.data, null, 2),
         );
+
+        if (
+          tariffResponse.data?.status !== 'success' ||
+          !tariffResponse.data?.data?.orderId
+        ) {
+          throw new HttpException(
+            tariffResponse.data?.errors?.[0]?.message ||
+              'Failed to place a resident order',
+            400,
+          );
+        }
+
+        const orderNumber = tariffResponse.data.data.listBaseOrderNumbers?.[0];
 
         const tariff = await this.convertToBytes(orderInfo.tariff as string);
         console.log('[PRODUCT.SERVICE] Converted tariff to bytes:', tariff);
@@ -1024,6 +1161,7 @@ export class ProductService {
           return {
             package_key: response.data.data.package_key,
             orderId: tariffResponse.data.data.orderId.toString(),
+            orderNumber,
           };
         } else {
           console.log(
@@ -1046,6 +1184,7 @@ export class ProductService {
           return {
             package_key: response.data.data.package_key,
             orderId: tariffResponse.data.data.orderId.toString(),
+            orderNumber,
           };
         }
       }
@@ -1058,6 +1197,9 @@ export class ProductService {
         '[PRODUCT.SERVICE] OrderInfo that caused error:',
         JSON.stringify(orderInfo, null, 2),
       );
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException('Failed to place an order', 500);
     }
   }
@@ -1165,10 +1307,7 @@ export class ProductService {
       throw new HttpException('Invalid resident tariff', 400);
     }
 
-    const currentPrice = await this.getCalcForOrder(
-      Proxy.resident,
-      tariffGb,
-    );
+    const currentPrice = await this.getCalcForOrder(Proxy.resident, tariffGb);
     if (new Decimal(user.balance).lt(currentPrice)) {
       throw new HttpException('Insufficient balance', 400);
     }
@@ -1180,8 +1319,7 @@ export class ProductService {
 
     const tariff = reference.tariffs?.find(
       (item) =>
-        item.name.toLowerCase() === tariffName.toLowerCase() &&
-        item.personal,
+        item.name.toLowerCase() === tariffName.toLowerCase() && item.personal,
     );
     if (!tariff) {
       throw new HttpException('Resident tariff not found', 400);
@@ -1287,22 +1425,39 @@ export class ProductService {
 
     // Check package status before attempting to create
     try {
-      const packagesResp = await this.proxySeller.get('/residentsubuser/packages');
+      const packagesResp = await this.proxySeller.get(
+        '/residentsubuser/packages',
+      );
       const packages = packagesResp.data.data || [];
       const pkg = packages.find((p: any) => p.package_key === data.package_key);
-      console.log('[modifyProxyResident] Package lookup result:', JSON.stringify(pkg));
+      console.log(
+        '[modifyProxyResident] Package lookup result:',
+        JSON.stringify(pkg),
+      );
       if (!pkg) {
-        console.error(`[modifyProxyResident] Package ${data.package_key} NOT FOUND in ProxySeller`);
+        console.error(
+          `[modifyProxyResident] Package ${data.package_key} NOT FOUND in ProxySeller`,
+        );
         throw new HttpException('Package not found', 400);
       }
       if (!pkg.is_active) {
-        console.error(`[modifyProxyResident] Package ${data.package_key} is INACTIVE. expired_at: ${JSON.stringify(pkg.expired_at)}, traffic_left: ${pkg.traffic_left}`);
-        throw new HttpException('Package is not active. Please contact support.', 400);
+        console.error(
+          `[modifyProxyResident] Package ${data.package_key} is INACTIVE. expired_at: ${JSON.stringify(pkg.expired_at)}, traffic_left: ${pkg.traffic_left}`,
+        );
+        throw new HttpException(
+          'Package is not active. Please contact support.',
+          400,
+        );
       }
-      console.log(`[modifyProxyResident] Package is active. expired_at: ${JSON.stringify(pkg.expired_at)}, traffic_left: ${pkg.traffic_left}`);
+      console.log(
+        `[modifyProxyResident] Package is active. expired_at: ${JSON.stringify(pkg.expired_at)}, traffic_left: ${pkg.traffic_left}`,
+      );
     } catch (error) {
       if (error instanceof HttpException) throw error;
-      console.error('[modifyProxyResident] Error checking package status:', error.message);
+      console.error(
+        '[modifyProxyResident] Error checking package status:',
+        error.message,
+      );
     }
 
     // Build geo object, only including non-empty fields
@@ -1327,12 +1482,24 @@ export class ProductService {
       requestBody.geo = geo;
     }
 
-    console.log('[modifyProxyResident] Sending to ProxySeller:', JSON.stringify(requestBody));
-    const response = await this.proxySeller.post('residentsubuser/list/add', requestBody);
-    console.log('[modifyProxyResident] ProxySeller response:', JSON.stringify(response.data));
+    console.log(
+      '[modifyProxyResident] Sending to ProxySeller:',
+      JSON.stringify(requestBody),
+    );
+    const response = await this.proxySeller.post(
+      'residentsubuser/list/add',
+      requestBody,
+    );
+    console.log(
+      '[modifyProxyResident] ProxySeller response:',
+      JSON.stringify(response.data),
+    );
 
     if (response.data.status !== 'success') {
-      console.error('[modifyProxyResident] ProxySeller error:', JSON.stringify(response.data));
+      console.error(
+        '[modifyProxyResident] ProxySeller error:',
+        JSON.stringify(response.data),
+      );
       throw new HttpException(response.data.errors[0].message, 400);
     }
 

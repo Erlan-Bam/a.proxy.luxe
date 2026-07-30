@@ -125,9 +125,12 @@ model Order {
   promocode     String?
   proxySellerId String?       @unique
   orderId       String?
+  orderNumber   String?
   end_date      String
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+
+  @@index([orderNumber])
 }
 
 model Payment {

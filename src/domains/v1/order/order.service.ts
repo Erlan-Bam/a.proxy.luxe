@@ -4,12 +4,14 @@ import {
   BadRequestException,
   HttpException,
 } from '@nestjs/common';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FinishOrderDto } from './dto/payment-order.dto';
 import { PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../shared/prisma.service';
-import { ProductService } from 'src/domains/product/product.service';
-import { OrderInfo } from 'src/domains/product/dto/order.dto';
+import { ProductService } from '../../product/product.service';
+import { OrderInfo } from '../../product/dto/order.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { UserService } from '../user/user.service';
 
@@ -116,8 +118,29 @@ export class OrderService {
     };
   }
 
-  async generalLog(page = 1, limit = 100) {
-    const skip = (page - 1) * limit;
+  async generalLog(
+    paramsOrPage:
+      | {
+          ordersPage: number;
+          ordersLimit: number;
+          paymentsPage: number;
+          paymentsLimit: number;
+        }
+      | number = 1,
+    legacyLimit = 50,
+  ) {
+    const params =
+      typeof paramsOrPage === 'object'
+        ? paramsOrPage
+        : {
+            ordersPage: paramsOrPage,
+            ordersLimit: legacyLimit,
+            paymentsPage: paramsOrPage,
+            paymentsLimit: legacyLimit,
+          };
+
+    const ordersSkip = (params.ordersPage - 1) * params.ordersLimit;
+    const paymentsSkip = (params.paymentsPage - 1) * params.paymentsLimit;
 
     const [orders, totalOrders] = await this.prisma.$transaction([
       this.prisma.order.findMany({
@@ -130,8 +153,8 @@ export class OrderService {
           },
         },
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
+        skip: ordersSkip,
+        take: params.ordersLimit,
       }),
       this.prisma.order.count({
         where: { status: 'PAID' },
@@ -148,8 +171,8 @@ export class OrderService {
             },
           },
         },
-        skip,
-        take: limit,
+        skip: paymentsSkip,
+        take: params.paymentsLimit,
       }),
       this.prisma.payment.count(),
     ]);
@@ -159,10 +182,65 @@ export class OrderService {
       totalOrders,
       payments,
       totalPayments,
+      page: params.ordersPage,
+      limit: params.ordersLimit,
+      ordersPage: params.ordersPage,
+      ordersLimit: params.ordersLimit,
+      paymentsPage: params.paymentsPage,
+      paymentsLimit: params.paymentsLimit,
+      totalOrderPages: Math.ceil(totalOrders / params.ordersLimit),
+      totalPaymentPages: Math.ceil(totalPayments / params.paymentsLimit),
+    };
+  }
+
+  async errorLog(page = 1, limit = 100, search = '') {
+    const logPath = join(process.cwd(), 'logs', 'admin-errors.log');
+    let raw = '';
+
+    try {
+      raw = await fs.readFile(logPath, 'utf8');
+    } catch (error: any) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+
+    const normalizedSearch = search.trim().toLowerCase();
+    const errors = raw
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return {
+            timestamp: null,
+            message: line,
+          };
+        }
+      })
+      .filter((entry) => {
+        if (!normalizedSearch) {
+          return true;
+        }
+
+        return JSON.stringify(entry).toLowerCase().includes(normalizedSearch);
+      })
+      .sort((a, b) => {
+        const left = new Date(a.timestamp || 0).getTime();
+        const right = new Date(b.timestamp || 0).getTime();
+        return right - left;
+      });
+
+    const skip = (page - 1) * limit;
+    const paginatedErrors = errors.slice(skip, skip + limit);
+
+    return {
+      errors: paginatedErrors,
+      total: errors.length,
       page,
       limit,
-      totalOrderPages: Math.ceil(totalOrders / limit),
-      totalPaymentPages: Math.ceil(totalPayments / limit),
+      totalPages: Math.ceil(errors.length / limit),
     };
   }
 
@@ -327,13 +405,21 @@ export class OrderService {
               const existingPK = package_key
                 ? await prisma.order.findUnique({
                     where: { proxySellerId: package_key },
+                    select: { id: true },
                   })
                 : null;
+
+              if (existingPK && existingPK.id !== order.id) {
+                await prisma.order.update({
+                  where: { id: existingPK.id },
+                  data: { proxySellerId: null },
+                });
+              }
+
               await prisma.order.update({
                 where: { id: order.id },
                 data: {
-                  proxySellerId:
-                    package_key && !existingPK ? package_key : null,
+                  proxySellerId: package_key,
                   status: 'PAID',
                   orderId: externalOrderId,
                   orderNumber,

@@ -16,6 +16,25 @@ import { FinishOrderDto } from './dto/payment-order.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { UserType } from '@prisma/client';
 
+const ADMIN_LOG_LIMIT_OPTIONS = [100, 200, 300] as const;
+
+const parsePositiveInt = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const parseAdminLogLimit = (
+  value: string | undefined,
+  fallback: (typeof ADMIN_LOG_LIMIT_OPTIONS)[number],
+) => {
+  const parsed = parsePositiveInt(value, fallback);
+  return ADMIN_LOG_LIMIT_OPTIONS.includes(
+    parsed as (typeof ADMIN_LOG_LIMIT_OPTIONS)[number],
+  )
+    ? (parsed as (typeof ADMIN_LOG_LIMIT_OPTIONS)[number])
+    : fallback;
+};
+
 @Controller('v1/orders')
 @UseGuards(AuthGuard('jwt'))
 export class OrderController {
@@ -52,25 +71,43 @@ export class OrderController {
   @Get('admin/general-log')
   async generalLog(
     @Request() request,
-    @Query('page') page = '1',
-    @Query('limit') limit = '50',
+    @Query('ordersPage') ordersPage = '1',
+    @Query('ordersLimit') ordersLimit = '100',
+    @Query('paymentsPage') paymentsPage = '1',
+    @Query('paymentsLimit') paymentsLimit = '100',
+    @Query('page') legacyPage?: string,
+    @Query('limit') legacyLimit?: string,
   ) {
-    const pageNumber = this.parsePage(page);
-    const limitNumber = this.parseLimit(limit);
     if (request.user.type !== UserType.ADMIN) {
       throw new ForbiddenException('Access denied: Admins only');
     }
-    return this.orderService.generalLog(pageNumber, limitNumber);
+
+    const fallbackPage = parsePositiveInt(legacyPage, 1);
+    const fallbackLimit = parseAdminLogLimit(legacyLimit, 100);
+
+    return this.orderService.generalLog({
+      ordersPage: parsePositiveInt(ordersPage, fallbackPage),
+      ordersLimit: parseAdminLogLimit(ordersLimit, fallbackLimit),
+      paymentsPage: parsePositiveInt(paymentsPage, fallbackPage),
+      paymentsLimit: parseAdminLogLimit(paymentsLimit, fallbackLimit),
+    });
   }
 
-  private parsePage(value: string): number {
-    const page = Number.parseInt(value, 10);
-    return Number.isFinite(page) && page > 0 ? page : 1;
-  }
+  @Get('admin/error-log')
+  async errorLog(
+    @Request() request,
+    @Query('page') page = '1',
+    @Query('limit') limit = '100',
+    @Query('search') search = '',
+  ) {
+    if (request.user.type !== UserType.ADMIN) {
+      throw new ForbiddenException('Access denied: Admins only');
+    }
 
-  private parseLimit(value: string): number {
-    const limit = Number.parseInt(value, 10);
-    return Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 300) : 100;
+    const pageNumber = parsePositiveInt(page, 1);
+    const limitNumber = parseAdminLogLimit(limit, 100);
+
+    return this.orderService.errorLog(pageNumber, limitNumber, search);
   }
 
   @Get('admin/:userId')

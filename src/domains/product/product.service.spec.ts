@@ -86,7 +86,10 @@ describe('ProductService.prolongResident', () => {
         return Promise.resolve({
           data: {
             status: 'success',
-            data: { orderId: 12345 },
+            data: {
+              orderId: 12345,
+              listBaseOrderNumbers: ['resident-renewal-12345'],
+            },
           },
         });
       }
@@ -123,6 +126,19 @@ describe('ProductService.prolongResident', () => {
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: order.userId },
       data: { balance: { decrement: 2.4 } },
+    });
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: order.id },
+      data: {
+        end_date: '22.08.2026',
+        orderNumber: 'resident-renewal-12345',
+      },
+    });
+    expect(prisma.order.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        orderId: '12345',
+        orderNumber: 'resident-renewal-12345',
+      }),
     });
     expect(result).toEqual({
       status: 'success',

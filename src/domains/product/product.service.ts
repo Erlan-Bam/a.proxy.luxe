@@ -1349,6 +1349,8 @@ export class ProductService {
         400,
       );
     }
+    const renewalOrderNumber =
+      tariffOrderResponse.data.data.listBaseOrderNumbers?.[0];
 
     const addedTraffic = await this.convertToBytes(tariffName);
     const currentTrafficLimit = Number(residentPackage.traffic_limit);
@@ -1389,7 +1391,10 @@ export class ProductService {
 
       await prisma.order.update({
         where: { id: order.id },
-        data: { end_date: newEndDate },
+        data: {
+          end_date: newEndDate,
+          ...(renewalOrderNumber && { orderNumber: renewalOrderNumber }),
+        },
       });
 
       await prisma.order.create({
@@ -1405,6 +1410,7 @@ export class ProductService {
           tariff: order.tariff,
           totalPrice: currentPrice,
           orderId: String(tariffOrderResponse.data.data.orderId),
+          orderNumber: renewalOrderNumber,
           end_date: newEndDate,
         },
       });

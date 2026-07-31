@@ -1,7 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../shared/prisma.service';
 import * as nodemailer from 'nodemailer';
-import { PaymentStatus, User, UserType } from '@prisma/client';
+import { PaymentStatus, Prisma, User, UserType } from '@prisma/client';
 import { AddBalanceDTO } from './dto/add-balance.dto';
 import { RemoveBalanceDTO } from './dto/remove-balance.dto';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -314,12 +314,12 @@ export class UserService {
       balance: updatedUser.balance,
     };
   }
-  async getUsersInfo(user: User, page = 1, limit = 100) {
+  async getUsersInfo(user: User, page = 1, limit: number | null = 100) {
     if (user.type !== UserType.ADMIN) {
       throw new HttpException('Only admins can access this information', 403);
     }
 
-    const skip = (page - 1) * limit;
+    const effectivePage = limit === null ? 1 : page;
     const select = {
       id: true,
       email: true,
@@ -330,23 +330,27 @@ export class UserService {
       ip: true,
       isBanned: true,
     };
+    const findManyArgs: Prisma.UserFindManyArgs = {
+      select,
+      orderBy: { createdAt: 'desc' },
+    };
+
+    if (limit !== null) {
+      findManyArgs.skip = (effectivePage - 1) * limit;
+      findManyArgs.take = limit;
+    }
 
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.user.findMany({
-        select,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
+      this.prisma.user.findMany(findManyArgs),
       this.prisma.user.count(),
     ]);
 
     return {
       data,
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: effectivePage,
+      limit: limit ?? total,
+      totalPages: limit === null ? 1 : Math.ceil(total / limit),
     };
   }
   async addPartner(partnerId: string, userId: string) {

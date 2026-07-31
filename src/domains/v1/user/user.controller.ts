@@ -85,11 +85,12 @@ export class UserController {
     @Request() request,
     @Query('page') page = '1',
     @Query('limit') limit = '100',
+    @Query('all') all = 'false',
   ) {
     return this.userService.getUsersInfo(
       request.user,
       this.parsePage(page),
-      this.parseLimit(limit),
+      all.toLowerCase() === 'true' ? null : this.parseLimit(limit),
     );
   }
 

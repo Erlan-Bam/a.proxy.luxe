@@ -9,6 +9,11 @@ describe('UserService promo codes', () => {
       create: jest.fn(),
       delete: jest.fn(),
     },
+    user: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    $transaction: jest.fn((operations) => Promise.all(operations)),
   };
   const service = new UserService(prisma as never, {} as never);
   const admin = { id: 'admin-id', type: UserType.ADMIN } as never;
@@ -66,6 +71,31 @@ describe('UserService promo codes', () => {
     });
     expect(prisma.coupon.delete).toHaveBeenCalledWith({
       where: { code: 'SUMMER25' },
+    });
+  });
+
+  it('returns the complete user list when pagination is disabled', async () => {
+    const users = [
+      { id: 'new-user', email: 'new@example.com' },
+      { id: 'old-user', email: 'old@example.com' },
+    ];
+    prisma.user.findMany.mockResolvedValue(users);
+    prisma.user.count.mockResolvedValue(users.length);
+
+    const result = await service.getUsersInfo(admin, 7, null);
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        skip: expect.anything(),
+        take: expect.anything(),
+      }),
+    );
+    expect(result).toMatchObject({
+      data: users,
+      total: 2,
+      page: 1,
+      limit: 2,
+      totalPages: 1,
     });
   });
 });

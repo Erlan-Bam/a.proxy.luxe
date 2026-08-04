@@ -10,5 +10,10 @@ export class ProlongResidentDto {
   packageKey: string;
 
   @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  tariff?: string;
+
+  @IsOptional()
   user: User;
 }

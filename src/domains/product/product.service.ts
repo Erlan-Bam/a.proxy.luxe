@@ -1297,11 +1297,11 @@ export class ProductService {
       throw new HttpException('User not found', 404);
     }
 
-    if (!order.tariff) {
+    const tariffName = data.tariff ?? order.tariff;
+    if (!tariffName) {
       throw new HttpException('Invalid resident tariff', 400);
     }
 
-    const tariffName = order.tariff;
     const tariffGb = Number.parseInt(tariffName, 10);
     if (!Number.isFinite(tariffGb)) {
       throw new HttpException('Invalid resident tariff', 400);
@@ -1393,6 +1393,8 @@ export class ProductService {
         where: { id: order.id },
         data: {
           end_date: newEndDate,
+          tariff: tariffName,
+          totalPrice: currentPrice,
           ...(renewalOrderNumber && { orderNumber: renewalOrderNumber }),
         },
       });
@@ -1407,7 +1409,7 @@ export class ProductService {
           proxyType: order.proxyType,
           status: 'PAID',
           goal: order.goal,
-          tariff: order.tariff,
+          tariff: tariffName,
           totalPrice: currentPrice,
           orderId: String(tariffOrderResponse.data.data.orderId),
           orderNumber: renewalOrderNumber,
@@ -1423,6 +1425,7 @@ export class ProductService {
       price: currentPrice,
       balance: Number(updatedUser.balance),
       date_end: newEndDate,
+      tariff: tariffName,
     };
   }
 

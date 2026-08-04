@@ -63,7 +63,10 @@ describe('ProductService.prolongResident', () => {
 
     jest.spyOn(service, 'getProductReferenceByType').mockResolvedValue({
       status: 'success',
-      tariffs: [{ id: 101, name: '1 Gb', personal: true }],
+      tariffs: [
+        { id: 101, name: '1 Gb', personal: true },
+        { id: 103, name: '3 Gb', personal: true },
+      ],
     } as any);
     jest
       .spyOn(service, 'getOneMonthLaterFormatted')
@@ -131,6 +134,8 @@ describe('ProductService.prolongResident', () => {
       where: { id: order.id },
       data: {
         end_date: '22.08.2026',
+        tariff: '1 Gb',
+        totalPrice: 2.4,
         orderNumber: 'resident-renewal-12345',
       },
     });
@@ -145,6 +150,54 @@ describe('ProductService.prolongResident', () => {
       price: 2.4,
       balance: 7.6,
       date_end: '22.08.2026',
+      tariff: '1 Gb',
+    });
+  });
+
+  it('renews the package with the tariff selected by the user', async () => {
+    prisma.user.update.mockResolvedValue({
+      id: order.userId,
+      balance: 3,
+    });
+
+    const result = await service.prolongResident({
+      orderId: order.id,
+      packageKey: 'resident-package',
+      tariff: '3 Gb',
+      user: { id: order.userId } as any,
+    });
+
+    expect(proxySeller.post).toHaveBeenNthCalledWith(1, '/order/make', {
+      tarifId: 103,
+      paymentId: 1,
+    });
+    expect(proxySeller.post).toHaveBeenNthCalledWith(
+      2,
+      '/residentsubuser/update',
+      expect.objectContaining({
+        package_key: 'resident-package',
+        traffic_limit: String(4 * 1024 ** 3),
+      }),
+    );
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: order.userId },
+      data: { balance: { decrement: 7 } },
+    });
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: order.id },
+      data: {
+        end_date: '22.08.2026',
+        tariff: '3 Gb',
+        totalPrice: 7,
+        orderNumber: 'resident-renewal-12345',
+      },
+    });
+    expect(result).toEqual({
+      status: 'success',
+      price: 7,
+      balance: 3,
+      date_end: '22.08.2026',
+      tariff: '3 Gb',
     });
   });
 

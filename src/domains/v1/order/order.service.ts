@@ -299,10 +299,12 @@ export class OrderService {
         where: {
           id: paymentDto.orderId,
           status: PaymentStatus.PENDING,
+          ...(paymentDto.proxyType ? { type: 'ipv6' as const } : {}),
         },
         data: {
           status: PaymentStatus.PROCESSING,
           updatedAt: new Date(),
+          ...(paymentDto.proxyType ? { proxyType: paymentDto.proxyType } : {}),
         },
       });
 

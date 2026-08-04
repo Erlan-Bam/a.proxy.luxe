@@ -1,4 +1,5 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { ProxyType } from '@prisma/client';
 
 export class FinishOrderDto {
   @IsUUID()
@@ -6,5 +7,9 @@ export class FinishOrderDto {
 
   @IsString()
   @IsOptional()
-  promocode: string;
+  promocode?: string;
+
+  @IsEnum(ProxyType)
+  @IsOptional()
+  proxyType?: ProxyType;
 }

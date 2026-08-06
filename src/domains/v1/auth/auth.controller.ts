@@ -58,10 +58,12 @@ export class AuthController {
     @Request() request,
   ) {
     const lang =
+      resetPasswordEmailDto.lang ||
       request.headers['accept-language']
         ?.split(',')[0]
         ?.split('-')[0]
-        ?.toLowerCase() || 'en';
+        ?.toLowerCase() ||
+      'en';
     return this.authService.sendResetPassword(resetPasswordEmailDto, lang);
   }
 }

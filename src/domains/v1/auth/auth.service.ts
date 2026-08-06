@@ -28,6 +28,12 @@ interface JwtRefreshTokenPayload {
   refreshTokenId: string;
 }
 
+interface PasswordResetTokenPayload {
+  sub: string;
+  email: string;
+  purpose: 'password-reset';
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger('AdminAuth');
@@ -121,9 +127,7 @@ export class AuthService {
     });
 
     if (!adminUser) {
-      this.logger.error(
-        `Admin login: no ADMIN user found in DB | IP: ${ip}`,
-      );
+      this.logger.error(`Admin login: no ADMIN user found in DB | IP: ${ip}`);
       throw new UnauthorizedException('Admin account not found');
     }
 
@@ -204,41 +208,82 @@ export class AuthService {
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
-    const { email, code, newPassword } = resetPasswordDto;
+    const { token, newPassword } = resetPasswordDto;
+    const resetTokenSecret = this.getPasswordResetSecret();
+    let payload: PasswordResetTokenPayload;
 
-    const user = await this.prisma.user.findUnique({ where: { email: email } });
-    if (!user) {
-      throw new HttpException('User with this email does not exist', 400);
+    try {
+      payload = await this.jwtService.verifyAsync<PasswordResetTokenPayload>(
+        token,
+        { secret: resetTokenSecret },
+      );
+    } catch {
+      throw new HttpException('Invalid or expired reset token', 400);
+    }
+
+    if (payload.purpose !== 'password-reset') {
+      throw new HttpException('Invalid or expired reset token', 400);
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
+    if (
+      !user ||
+      user.email !== payload.email ||
+      user.change_password_code !== token
+    ) {
+      throw new HttpException('Invalid or expired reset token', 400);
     }
 
     const isPasswordValid = await bcrypt.compare(newPassword, user.password);
     if (isPasswordValid) {
       throw new HttpException('New password matches old password', 400);
     }
-    if (user.change_password_code !== code) {
-      throw new HttpException('Invalid code', 400);
-    }
-
     await this.prisma.user.update({
-      where: { email: email },
+      where: { id: user.id },
       data: {
         password: await bcrypt.hash(newPassword, 10),
         change_password_code: null,
       },
     });
+
+    return { message: 'Password changed successfully' };
   }
 
   async sendResetPassword(data: ResetPasswordEmailDto, lang: string = 'en') {
     const { email } = data;
-    const code = await this.userService.generateVerificationCode();
+    const locale = lang === 'ru' ? 'ru' : 'en';
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    // Do not reveal whether an account exists for the supplied email.
+    if (!user) {
+      return { message: 'Check email' };
+    }
+
+    const token = await this.jwtService.signAsync(
+      {
+        sub: user.id,
+        email: user.email,
+        purpose: 'password-reset',
+      } satisfies PasswordResetTokenPayload,
+      {
+        secret: this.getPasswordResetSecret(),
+        expiresIn: '1h',
+      },
+    );
 
     await this.prisma.user.update({
-      where: { email: email },
-      data: { change_password_code: code },
+      where: { id: user.id },
+      data: { change_password_code: token },
     });
 
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'https://proxy.luxe';
+    const resetLink = `${frontendUrl.replace(/\/$/, '')}/${locale}/forgot-password?token=${encodeURIComponent(token)}`;
+
     const emailTemplate =
-      lang === 'ru'
+      locale === 'ru'
         ? `
             <!DOCTYPE html>
             <html lang="ru">
@@ -303,19 +348,17 @@ export class AuthService {
                                             </tr>
                                             <tr>
                                                 <td style="padding-bottom: 30px; font-size: 16px; line-height: 24px; color: #cccccc; text-align: center;">
-                                                    Для завершения смены пароля, пожалуйста, используйте следующий код подтверждения: ${code}
+                                                    Для смены пароля нажмите кнопку ниже. Ссылка действует в течение одного часа.
                                                 </td>
                                             </tr>
                                             <tr>
                                                 <td align="center" style="padding-bottom: 30px;">
-                                                <div style="background-color: rgba(243, 214, 117, 0.1); border: 1px solid rgba(243, 214, 117, 0.3); border-radius: 6px; padding: 20px; font-size: 28px; font-weight: bold; letter-spacing: 5px; color: #f3d675; text-align: center;">
-                                                        ${code}
-                                                    </div>
+                                                    <a href="${resetLink}" class="button" style="background-color: #f3d675; color: #000000; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-weight: bold; display: inline-block;">Изменить пароль</a>
                                                 </td>
                                             </tr>
                                             <tr>
                                                 <td style="font-size: 14px; line-height: 20px; color: #999999; text-align: center;">
-                                                    Если вы не запрашивали код на смену пароля на PROXY.LUXE, пожалуйста, проигнорируйте это письмо.
+                                                    Если вы не запрашивали смену пароля на PROXY.LUXE, пожалуйста, проигнорируйте это письмо.
                                                 </td>
                                             </tr>
                                         </table>
@@ -408,14 +451,12 @@ export class AuthService {
                                         </tr>
                                         <tr>
                                             <td style="padding-bottom: 30px; font-size: 16px; line-height: 24px; color: #cccccc; text-align: center;">
-                                                To complete the password reset, please use the following confirmation code: ${code}
+                                                Click the button below to reset your password. The link is valid for one hour.
                                             </td>
                                         </tr>
                                         <tr>
                                             <td align="center" style="padding-bottom: 30px;">
-                                                <div style="background-color: rgba(243, 214, 117, 0.1); border: 1px solid rgba(243, 214, 117, 0.3); border-radius: 6px; padding: 20px; font-size: 28px; font-weight: bold; letter-spacing: 5px; color: #f3d675; text-align: center;">
-                                                    ${code}
-                                                </div>
+                                                <a href="${resetLink}" class="button" style="background-color: #f3d675; color: #000000; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-weight: bold; display: inline-block;">Reset password</a>
                                             </td>
                                         </tr>
                                         <tr>
@@ -465,13 +506,29 @@ export class AuthService {
     const mailOptions: nodemailer.SendMailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
-      subject: 'Reset password code',
-      text: `Your code: ${code}`,
+      subject: locale === 'ru' ? 'Смена пароля' : 'Password reset',
+      text:
+        locale === 'ru'
+          ? `Для смены пароля перейдите по ссылке: ${resetLink}`
+          : `Reset your password using this link: ${resetLink}`,
       html: emailTemplate,
     };
 
     await transporter.sendMail(mailOptions);
 
     return { message: 'Check email' };
+  }
+
+  private getPasswordResetSecret(): string {
+    const secret =
+      this.configService.get<string>('JWT_PASSWORD_RESET_SECRET') ||
+      this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET');
+
+    if (!secret) {
+      this.logger.error('Password reset token secret is not configured');
+      throw new HttpException('Password reset is temporarily unavailable', 500);
+    }
+
+    return secret;
   }
 }

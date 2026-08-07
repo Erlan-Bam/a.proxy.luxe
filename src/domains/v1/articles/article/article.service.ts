@@ -40,11 +40,12 @@ export class ArticleService {
     return this.findOne(article.id);
   }
 
-  async findAll(page = 1, limit = 10, lang: Language = 'ru') {
-    const skip = (page - 1) * limit;
-    return await this.prisma.article.findMany({
-      skip,
-      take: limit,
+  async findAll(
+    page = 1,
+    limit: number | null = 10,
+    lang: Language = 'ru',
+  ) {
+    const query = {
       where: { lang: lang },
       select: {
         id: true,
@@ -67,8 +68,44 @@ export class ArticleService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' as const },
+    };
+
+    if (limit === null) {
+      return this.prisma.article.findMany(query);
+    }
+
+    return this.prisma.article.findMany({
+      ...query,
+      skip: (page - 1) * limit,
+      take: limit,
     });
+  }
+
+  async findAllPaginated(
+    page = 1,
+    limit: number | null = 10,
+    lang: Language = 'ru',
+  ) {
+    const effectivePage = limit === null ? 1 : page;
+    const [data, total] = await Promise.all([
+      this.findAll(effectivePage, limit, lang),
+      this.prisma.article.count({ where: { lang } }),
+    ]);
+    const effectiveLimit = limit ?? total;
+
+    return {
+      data,
+      total,
+      page: effectivePage,
+      limit: effectiveLimit,
+      totalPages:
+        limit === null
+          ? total > 0
+            ? 1
+            : 0
+          : Math.ceil(total / limit),
+    };
   }
 
   async findOne(identifier: string) {

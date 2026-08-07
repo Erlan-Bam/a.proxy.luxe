@@ -59,9 +59,23 @@ export class ArticleController {
     @Query('lang', new ParseEnumPipe(Language)) lang: Language,
     @Query('page') page = 1,
     @Query('limit') limit = 9,
+    @Query('paginated') paginated = 'false',
+    @Query('all') all = 'false',
   ) {
-    const pageNumber = parseInt(page as any, 9);
-    const limitNumber = parseInt(limit as any, 9);
+    const pageNumber = this.parsePositiveInt(page, 1);
+    const limitNumber =
+      all.toLowerCase() === 'true'
+        ? null
+        : this.parsePositiveInt(limit, 9);
+
+    if (paginated.toLowerCase() === 'true') {
+      return this.articleService.findAllPaginated(
+        pageNumber,
+        limitNumber,
+        lang,
+      );
+    }
+
     return this.articleService.findAll(pageNumber, limitNumber, lang);
   }
 
@@ -187,5 +201,10 @@ export class ArticleController {
       limitNumber,
       lang,
     );
+  }
+
+  private parsePositiveInt(value: string | number, fallback: number): number {
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   }
 }

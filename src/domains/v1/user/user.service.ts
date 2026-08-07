@@ -747,15 +747,22 @@ export class UserService {
     return await this.prisma.coupon.findMany();
   }
   async deletePromocode(user: User, code: string) {
-    const promocode = code.trim().toUpperCase();
+    const exactCode = code.trim();
+    const normalizedCode = exactCode.toUpperCase();
 
-    if (!promocode) {
+    if (!exactCode) {
       throw new HttpException('Promo code is required', 400);
     }
 
-    const coupon = await this.prisma.coupon.findUnique({
-      where: { code: promocode },
+    let coupon = await this.prisma.coupon.findUnique({
+      where: { code: exactCode },
     });
+
+    if (!coupon && normalizedCode !== exactCode) {
+      coupon = await this.prisma.coupon.findUnique({
+        where: { code: normalizedCode },
+      });
+    }
 
     if (!coupon) {
       throw new HttpException('Coupon not found', 404);
@@ -772,7 +779,7 @@ export class UserService {
     }
 
     return await this.prisma.coupon.delete({
-      where: { code: promocode },
+      where: { code: coupon.code },
     });
   }
 

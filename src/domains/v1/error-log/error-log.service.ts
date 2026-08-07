@@ -25,23 +25,35 @@ export class ErrorLogService {
     }
   }
 
-  async findAll(page = 1, limit = 100) {
-    const skip = (page - 1) * limit;
+  async findAll(page = 1, limit: number | null = 100) {
+    const showAll = limit === null;
+    const effectivePage = showAll ? 1 : page;
+    const dataQuery = showAll
+      ? this.prisma.errorLog.findMany({
+          orderBy: { createdAt: 'desc' },
+        })
+      : this.prisma.errorLog.findMany({
+          orderBy: { createdAt: 'desc' },
+          skip: (effectivePage - 1) * limit,
+          take: limit,
+        });
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.errorLog.findMany({
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
+      dataQuery,
       this.prisma.errorLog.count(),
     ]);
+
+    const effectiveLimit = showAll ? total : limit;
 
     return {
       data,
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: effectivePage,
+      limit: effectiveLimit,
+      totalPages: showAll
+        ? total > 0
+          ? 1
+          : 0
+        : Math.ceil(total / effectiveLimit),
     };
   }
 }

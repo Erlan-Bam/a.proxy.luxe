@@ -9,10 +9,14 @@ export class ErrorLogController {
   constructor(private readonly errorLogService: ErrorLogService) {}
 
   @Get()
-  findAll(@Query('page') page = '1', @Query('limit') limit = '100') {
+  findAll(
+    @Query('page') page = '1',
+    @Query('limit') limit = '100',
+    @Query('all') all = 'false',
+  ) {
     return this.errorLogService.findAll(
       this.parsePage(page),
-      this.parseLimit(limit),
+      all.toLowerCase() === 'true' ? null : this.parseLimit(limit),
     );
   }
 

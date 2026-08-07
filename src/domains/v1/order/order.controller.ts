@@ -77,6 +77,7 @@ export class OrderController {
     @Query('paymentsLimit') paymentsLimit = '100',
     @Query('page') legacyPage?: string,
     @Query('limit') legacyLimit?: string,
+    @Query('all') all = 'false',
   ) {
     if (request.user.type !== UserType.ADMIN) {
       throw new ForbiddenException('Access denied: Admins only');
@@ -84,12 +85,17 @@ export class OrderController {
 
     const fallbackPage = parsePositiveInt(legacyPage, 1);
     const fallbackLimit = parseAdminLogLimit(legacyLimit, 100);
+    const showAll = all.toLowerCase() === 'true';
 
     return this.orderService.generalLog({
       ordersPage: parsePositiveInt(ordersPage, fallbackPage),
-      ordersLimit: parseAdminLogLimit(ordersLimit, fallbackLimit),
+      ordersLimit: showAll
+        ? null
+        : parseAdminLogLimit(ordersLimit, fallbackLimit),
       paymentsPage: parsePositiveInt(paymentsPage, fallbackPage),
-      paymentsLimit: parseAdminLogLimit(paymentsLimit, fallbackLimit),
+      paymentsLimit: showAll
+        ? null
+        : parseAdminLogLimit(paymentsLimit, fallbackLimit),
     });
   }
 

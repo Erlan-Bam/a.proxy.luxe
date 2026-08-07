@@ -102,3 +102,61 @@ describe('OrderService', () => {
     );
   });
 });
+
+describe('OrderService admin log pagination', () => {
+  const prisma = {
+    order: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    payment: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    $transaction: jest.fn((operations) => Promise.all(operations)),
+  };
+  const service = new OrderService(prisma as never, {} as never, {} as never);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns all orders and payments when pagination is disabled', async () => {
+    const orders = [{ id: 'order-1' }];
+    const payments = [{ id: 'payment-1' }, { id: 'payment-2' }];
+    prisma.order.findMany.mockResolvedValue(orders);
+    prisma.order.count.mockResolvedValue(orders.length);
+    prisma.payment.findMany.mockResolvedValue(payments);
+    prisma.payment.count.mockResolvedValue(payments.length);
+
+    const result = await service.generalLog({
+      ordersPage: 4,
+      ordersLimit: null,
+      paymentsPage: 5,
+      paymentsLimit: null,
+    });
+
+    expect(prisma.order.findMany).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        skip: expect.anything(),
+        take: expect.anything(),
+      }),
+    );
+    expect(prisma.payment.findMany).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        skip: expect.anything(),
+        take: expect.anything(),
+      }),
+    );
+    expect(result).toMatchObject({
+      orders,
+      payments,
+      ordersPage: 1,
+      paymentsPage: 1,
+      ordersLimit: 1,
+      paymentsLimit: 2,
+      totalOrderPages: 1,
+      totalPaymentPages: 1,
+    });
+  });
+});

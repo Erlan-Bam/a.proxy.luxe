@@ -25,6 +25,7 @@ import { UpdateListDto } from './dto/update-list.dto';
 import { PayoutPartner } from './dto/payout-partner.dto';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { FinishPayoutDto } from './dto/finish-payout.dto';
+import { DeletePromocodeDTO } from './dto/delete-promo.dto';
 
 @Controller('v1/user')
 export class UserController {
@@ -161,6 +162,15 @@ export class UserController {
   @UseGuards(AuthGuard('jwt'))
   async getPromocode(@Request() req) {
     return this.userService.getPromocode(req.user);
+  }
+
+  @Delete('promocode')
+  @UseGuards(AuthGuard('jwt'))
+  async deletePromocodeByBody(
+    @Request() req,
+    @Body() data: DeletePromocodeDTO,
+  ) {
+    return this.userService.deletePromocode(req.user, data.code);
   }
 
   @Delete('promocode/delete/:code')

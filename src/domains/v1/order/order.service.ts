@@ -122,9 +122,9 @@ export class OrderService {
     paramsOrPage:
       | {
           ordersPage: number;
-          ordersLimit: number;
+          ordersLimit: number | null;
           paymentsPage: number;
-          paymentsLimit: number;
+          paymentsLimit: number | null;
         }
       | number = 1,
     legacyLimit = 50,
@@ -139,57 +139,84 @@ export class OrderService {
             paymentsLimit: legacyLimit,
           };
 
-    const ordersSkip = (params.ordersPage - 1) * params.ordersLimit;
-    const paymentsSkip = (params.paymentsPage - 1) * params.paymentsLimit;
-
-    const [orders, totalOrders] = await this.prisma.$transaction([
-      this.prisma.order.findMany({
-        where: { status: 'PAID' },
-        include: {
-          user: {
-            select: {
-              email: true,
-            },
+    const ordersPage = params.ordersLimit === null ? 1 : params.ordersPage;
+    const paymentsPage = params.paymentsLimit === null ? 1 : params.paymentsPage;
+    const orderQuery = {
+      where: { status: 'PAID' as const },
+      include: {
+        user: {
+          select: {
+            email: true,
           },
         },
-        orderBy: { createdAt: 'desc' },
-        skip: ordersSkip,
-        take: params.ordersLimit,
-      }),
+      },
+      orderBy: { createdAt: 'desc' as const },
+    };
+    const ordersQuery =
+      params.ordersLimit === null
+        ? this.prisma.order.findMany(orderQuery)
+        : this.prisma.order.findMany({
+            ...orderQuery,
+            skip: (ordersPage - 1) * params.ordersLimit,
+            take: params.ordersLimit,
+          });
+    const paymentQuery = {
+      orderBy: { updatedAt: 'desc' as const },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    };
+    const paymentsQuery =
+      params.paymentsLimit === null
+        ? this.prisma.payment.findMany(paymentQuery)
+        : this.prisma.payment.findMany({
+            ...paymentQuery,
+            skip: (paymentsPage - 1) * params.paymentsLimit,
+            take: params.paymentsLimit,
+          });
+
+    const [orders, totalOrders] = await this.prisma.$transaction([
+      ordersQuery,
       this.prisma.order.count({
         where: { status: 'PAID' },
       }),
     ]);
 
     const [payments, totalPayments] = await this.prisma.$transaction([
-      this.prisma.payment.findMany({
-        orderBy: { updatedAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              email: true,
-            },
-          },
-        },
-        skip: paymentsSkip,
-        take: params.paymentsLimit,
-      }),
+      paymentsQuery,
       this.prisma.payment.count(),
     ]);
+
+    const effectiveOrdersLimit = params.ordersLimit ?? totalOrders;
+    const effectivePaymentsLimit = params.paymentsLimit ?? totalPayments;
 
     return {
       orders,
       totalOrders,
       payments,
       totalPayments,
-      page: params.ordersPage,
-      limit: params.ordersLimit,
-      ordersPage: params.ordersPage,
-      ordersLimit: params.ordersLimit,
-      paymentsPage: params.paymentsPage,
-      paymentsLimit: params.paymentsLimit,
-      totalOrderPages: Math.ceil(totalOrders / params.ordersLimit),
-      totalPaymentPages: Math.ceil(totalPayments / params.paymentsLimit),
+      page: ordersPage,
+      limit: effectiveOrdersLimit,
+      ordersPage,
+      ordersLimit: effectiveOrdersLimit,
+      paymentsPage,
+      paymentsLimit: effectivePaymentsLimit,
+      totalOrderPages:
+        params.ordersLimit === null
+          ? totalOrders > 0
+            ? 1
+            : 0
+          : Math.ceil(totalOrders / params.ordersLimit),
+      totalPaymentPages:
+        params.paymentsLimit === null
+          ? totalPayments > 0
+            ? 1
+            : 0
+          : Math.ceil(totalPayments / params.paymentsLimit),
     };
   }
 

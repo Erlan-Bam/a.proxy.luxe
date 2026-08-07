@@ -7,6 +7,7 @@ import {
   Max,
   IsInt,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 
 class GeoDTO {
@@ -31,10 +32,14 @@ export class ModifyProxyResidentDto {
   @IsString()
   title: string;
 
+  @ValidateIf(
+    (_object, value) =>
+      value !== null && value !== undefined && value !== 'each_request',
+  )
   @IsInt()
   @Min(-1)
   @Max(3600)
-  rotation: number;
+  rotation: number | 'each_request' | null;
 
   @IsInt()
   @Min(1)

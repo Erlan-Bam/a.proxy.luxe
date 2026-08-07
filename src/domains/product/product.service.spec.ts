@@ -216,3 +216,62 @@ describe('ProductService.prolongResident', () => {
     expect(proxySeller.post).not.toHaveBeenCalled();
   });
 });
+
+describe('ProductService.modifyProxyResident', () => {
+  const activePackage = {
+    package_key: 'f39a0c1d4fafa09c189a',
+    is_active: true,
+    expired_at: { date: '2026-06-12 23:59:59.000000' },
+    traffic_left: '1073741824',
+  };
+
+  function createService() {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const proxySeller = {
+      get: jest.fn().mockResolvedValue({
+        data: {
+          data: [activePackage],
+        },
+      }),
+      post: jest.fn().mockResolvedValue({
+        data: {
+          status: 'success',
+          data: {
+            id: 20431569,
+          },
+          errors: [],
+        },
+      }),
+    };
+
+    (service as any).proxySeller = proxySeller;
+
+    return { service, proxySeller };
+  }
+
+  it.each([
+    ['null rotation from JSON NaN', null],
+    ['each_request rotation alias', 'each_request'],
+  ])(
+    'normalizes %s to ProxySeller per-request rotation',
+    async (_name, rotation) => {
+      const { service, proxySeller } = createService();
+
+      await service.modifyProxyResident({
+        package_key: activePackage.package_key,
+        ports: 1,
+        whitelist: '',
+        title: 'avitoria',
+        rotation,
+        geo: { country: 'RU' },
+      } as any);
+
+      expect(proxySeller.post).toHaveBeenCalledWith(
+        'residentsubuser/list/add',
+        expect.objectContaining({
+          rotation: 0,
+        }),
+      );
+    },
+  );
+});

@@ -1478,7 +1478,7 @@ export class ProductService {
 
     const requestBody: Record<string, any> = {
       title: data.title,
-      rotation: data.rotation,
+      rotation: this.normalizeResidentRotation(data.rotation),
       whitelist: data.whitelist,
       export: {
         ports: data.ports,
@@ -1516,6 +1516,21 @@ export class ProductService {
     return {
       status: 'success',
     };
+  }
+
+  private normalizeResidentRotation(
+    rotation: ModifyProxyResidentDto['rotation'],
+  ): number {
+    if (
+      rotation === null ||
+      rotation === undefined ||
+      rotation === 'each_request' ||
+      (typeof rotation === 'number' && Number.isNaN(rotation))
+    ) {
+      return 0;
+    }
+
+    return rotation;
   }
 
   async deleteList(listId: number, packageKey: string) {

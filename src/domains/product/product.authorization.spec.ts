@@ -130,3 +130,91 @@ describe('ProductService.addAuth', () => {
     });
   });
 });
+
+describe('ProductService IP authorizations', () => {
+  let service: ProductService;
+  let proxySeller: {
+    get: jest.Mock;
+    delete: jest.Mock;
+  };
+
+  beforeEach(() => {
+    service = new ProductService({ get: jest.fn() } as any, {} as any);
+    proxySeller = {
+      get: jest.fn(),
+      delete: jest.fn(),
+    };
+    (service as any).proxySeller = proxySeller;
+  });
+
+  it('returns only sanitized IP authorizations for the requested provider order', async () => {
+    proxySeller.get.mockResolvedValue({
+      data: {
+        status: 'success',
+        data: [
+          {
+            id: 'ip-auth-1',
+            active: true,
+            ip: '203.0.113.10',
+            orderNumber: '5094738_108303894',
+          },
+          {
+            id: 'password-auth-1',
+            active: true,
+            login: 'secret-login',
+            password: 'secret-password',
+            orderNumber: '5094738_108303894',
+          },
+          {
+            id: 'other-order-ip',
+            active: true,
+            ip: '203.0.113.20',
+            orderNumber: '9999999_100',
+          },
+        ],
+        errors: [],
+      },
+    });
+
+    await expect(service.getIpAuthorizations('5094738')).resolves.toEqual([
+      {
+        id: 'ip-auth-1',
+        active: true,
+        ip: '203.0.113.10',
+        orderNumber: '5094738_108303894',
+      },
+    ]);
+  });
+
+  it('deletes one exact authorization ID', async () => {
+    proxySeller.delete.mockResolvedValue({
+      data: { status: 'success', data: { deleted: true } },
+    });
+
+    await service.deleteIpAuthorization('ip-auth-1');
+
+    expect(proxySeller.delete).toHaveBeenCalledWith('/auth/delete', {
+      data: { id: 'ip-auth-1' },
+    });
+  });
+
+  it('throws a 502 when listing authorizations fails at the provider', async () => {
+    proxySeller.get.mockResolvedValue({
+      data: { status: 'error', data: [], errors: [] },
+    });
+
+    await expect(service.getIpAuthorizations('5094738')).rejects.toMatchObject({
+      status: 502,
+    });
+  });
+
+  it('throws a 502 when deleting an authorization fails at the provider', async () => {
+    proxySeller.delete.mockResolvedValue({
+      data: { status: 'error', data: { deleted: false }, errors: [] },
+    });
+
+    await expect(
+      service.deleteIpAuthorization('ip-auth-1'),
+    ).rejects.toMatchObject({ status: 502 });
+  });
+});

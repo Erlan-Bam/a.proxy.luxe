@@ -58,6 +58,29 @@ export class UserController {
     return await this.userService.checkValidCoupon(promocode);
   }
 
+  @Get('orders/:orderId/ip-authorizations')
+  @UseGuards(AuthGuard('jwt'))
+  async getIpAuthorizations(
+    @Param('orderId') orderId: string,
+    @Request() request,
+  ) {
+    return this.userService.getIpAuthorizations(request.user.id, orderId);
+  }
+
+  @Delete('orders/:orderId/ip-authorizations/:authorizationId')
+  @UseGuards(AuthGuard('jwt'))
+  async deleteIpAuthorization(
+    @Param('orderId') orderId: string,
+    @Param('authorizationId') authorizationId: string,
+    @Request() request,
+  ) {
+    return this.userService.deleteIpAuthorization(
+      request.user.id,
+      orderId,
+      authorizationId,
+    );
+  }
+
   @Post('add-auth')
   @UseGuards(AuthGuard('jwt'))
   async addAuth(@Body() body: AddAuthDto, @Request() request) {

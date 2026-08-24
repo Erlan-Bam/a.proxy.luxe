@@ -23,6 +23,7 @@ import { ProlongDto } from './dto/prolog.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { UpdateResident } from './dto/update-resident.dto';
 import { ProlongResidentDto } from './dto/prolong-resident.dto';
+import { IpAuthorizationRdo } from './rdo/ip-authorization.rdo';
 
 @Injectable()
 export class ProductService {
@@ -126,6 +127,42 @@ export class ProductService {
       }
 
       throw new HttpException('Failed to create IP authorization', 502);
+    }
+  }
+
+  async getIpAuthorizations(
+    providerOrderId: string,
+  ): Promise<IpAuthorizationRdo[]> {
+    const response = await this.proxySeller.get('/auth/list');
+    if (response.data?.status !== 'success') {
+      throw new HttpException('Unable to load IP authorizations', 502);
+    }
+
+    const items = Array.isArray(response.data.data) ? response.data.data : [];
+    return items
+      .filter(
+        (item: any) =>
+          typeof item.ip === 'string' &&
+          item.ip.length > 0 &&
+          String(item.orderNumber || '').split('_')[0] === providerOrderId,
+      )
+      .map((item: any) => ({
+        id: String(item.id),
+        active: Boolean(item.active),
+        ip: item.ip,
+        orderNumber: String(item.orderNumber),
+      }));
+  }
+
+  async deleteIpAuthorization(authorizationId: string): Promise<void> {
+    const response = await this.proxySeller.delete('/auth/delete', {
+      data: { id: authorizationId },
+    });
+    if (
+      response.data?.status !== 'success' ||
+      response.data?.data?.deleted !== true
+    ) {
+      throw new HttpException('Unable to delete IP authorization', 502);
     }
   }
 

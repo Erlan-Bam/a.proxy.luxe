@@ -1112,4 +1112,42 @@ export class UserService {
   async getCurrency() {
     return await this.prisma.currency.findUnique({ where: { name: 'rub' } });
   }
+
+  private async getOwnedProviderOrder(userId: string, orderId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, userId, status: PaymentStatus.PAID },
+      select: { id: true, proxySellerId: true },
+    });
+    if (!order) {
+      throw new HttpException('Order not found', 404);
+    }
+    if (!order.proxySellerId) {
+      throw new HttpException('Order has no provider identifier', 400);
+    }
+    return { id: order.id, proxySellerId: order.proxySellerId };
+  }
+
+  async getIpAuthorizations(userId: string, orderId: string) {
+    const order = await this.getOwnedProviderOrder(userId, orderId);
+    const items = await this.productService.getIpAuthorizations(
+      order.proxySellerId,
+    );
+    return { items };
+  }
+
+  async deleteIpAuthorization(
+    userId: string,
+    orderId: string,
+    authorizationId: string,
+  ) {
+    const order = await this.getOwnedProviderOrder(userId, orderId);
+    const items = await this.productService.getIpAuthorizations(
+      order.proxySellerId,
+    );
+    if (!items.some((item) => item.id === authorizationId)) {
+      throw new HttpException('IP authorization not found', 404);
+    }
+    await this.productService.deleteIpAuthorization(authorizationId);
+    return { success: true };
+  }
 }

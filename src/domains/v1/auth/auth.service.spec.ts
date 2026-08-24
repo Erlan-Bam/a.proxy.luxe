@@ -1,5 +1,6 @@
 import * as bcrypt from 'bcryptjs';
 import * as nodemailer from 'nodemailer';
+import { existsSync } from 'fs';
 import { AuthService } from './auth.service';
 
 jest.mock('nodemailer', () => ({
@@ -73,14 +74,26 @@ describe('AuthService password reset links', () => {
     });
     expect(sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
-        html: expect.stringContaining(
-          'https://proxy.luxe/ru/forgot-password?token=signed-reset-token',
-        ),
         text: expect.stringContaining(
           'https://proxy.luxe/ru/forgot-password?token=signed-reset-token',
         ),
+        html: expect.stringContaining('cid:proxy-luxe-logo'),
+        attachments: [
+          expect.objectContaining({
+            cid: 'proxy-luxe-logo',
+            filename: 'proxy-luxe-logo.png',
+            contentDisposition: 'inline',
+          }),
+        ],
       }),
     );
+
+    const [{ attachments, html }] = sendMail.mock.calls[0];
+    expect(html).toContain(
+      'https://proxy.luxe/ru/forgot-password?token=signed-reset-token',
+    );
+    expect(html).toContain('cid:proxy-luxe-logo');
+    expect(existsSync(attachments[0].path)).toBe(true);
   });
 
   it('changes the password once and clears the stored token', async () => {

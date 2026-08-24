@@ -13,6 +13,10 @@ import { AddAuthDto } from './dto/add-auth.dto';
 import { ProductService } from '../../product/product.service';
 import { PayoutPartner } from './dto/payout-partner.dto';
 import axios from 'axios';
+import {
+  EMAIL_LOGO_CID,
+  getEmailLogoAttachment,
+} from '../shared/email-assets';
 
 @Injectable()
 export class UserService {
@@ -98,7 +102,7 @@ export class UserService {
                                                 <table border="0" cellpadding="0" cellspacing="0">
                                                     <tr>
                                                         <td align="center" style="display: flex; align-items: center; justify-content: center;">
-                                                            <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="30px" height="30px" style="margin-right: 8px">
+                                                            <img src="cid:${EMAIL_LOGO_CID}" alt="Proxy.Luxe" width="44" height="44" style="display: inline-block; margin-right: 8px; vertical-align: middle; border: 0;">
                                                             <div style="font-size: 24px; font-weight: bold; color: #f3d675; letter-spacing: 1px;">PROXY.LUXE</div>
                                                         </td>
                                                     </tr>
@@ -204,7 +208,7 @@ export class UserService {
                                                 <table border="0" cellpadding="0" cellspacing="0">
                                                     <tr>
                                                         <td align="center" style="display: flex; align-items: center; justify-content: center;">
-                                                            <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="30px" height="30px" style="margin-right: 8px">
+                                                            <img src="cid:${EMAIL_LOGO_CID}" alt="Proxy.Luxe" width="44" height="44" style="display: inline-block; margin-right: 8px; vertical-align: middle; border: 0;">
                                                             <div style="font-size: 24px; font-weight: bold; color: #f3d675; letter-spacing: 1px;">PROXY.LUXE</div>
                                                         </td>
                                                     </tr>
@@ -285,6 +289,7 @@ export class UserService {
       subject: 'Verification code',
       text: `Your code: ${code}`,
       html: emailTemplate,
+      attachments: [getEmailLogoAttachment()],
     };
 
     await transporter.sendMail(mailOptions);
@@ -639,7 +644,7 @@ export class UserService {
           <table align="center" width="100%" style="max-width:600px; background-color: #000000; border-radius: 8px; color: white; padding: 30px;">
             <tr>
               <td align="center" style="font-size: 24px; font-weight: bold; color: #f3d675;">
-                <img src="https://i.ibb.co.com/ZRsDkGxS/favicon2.png" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;" />
+                <img src="cid:${EMAIL_LOGO_CID}" alt="Proxy.Luxe" width="44" height="44" style="display: inline-block; margin-right: 10px; vertical-align: middle; border: 0;" />
                 PROXY.LUXE
               </td>
             </tr>
@@ -680,7 +685,7 @@ export class UserService {
         <table align="center" width="100%" style="max-width:600px; background-color: #000000; border-radius: 8px; color: white; padding: 30px;">
           <tr>
             <td align="center" style="font-size: 24px; font-weight: bold; color: #f3d675;">
-              <img src="https://i.postimg.cc/rFfmSg7C/2025-04-01-16-18-31.jpg" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;" />
+              <img src="cid:${EMAIL_LOGO_CID}" alt="Proxy.Luxe" width="44" height="44" style="display: inline-block; margin-right: 10px; vertical-align: middle; border: 0;" />
               PROXY.LUXE
             </td>
           </tr>
@@ -732,6 +737,7 @@ export class UserService {
           ? 'Спасибо за покупку! Ваши прокси скоро будут доступны в личном кабинете.'
           : 'Thank you for your purchase! Your proxies will soon be available in your dashboard.',
       html: emailTemplate,
+      attachments: [getEmailLogoAttachment()],
     };
 
     await transporter.sendMail(mailOptions);
@@ -822,7 +828,7 @@ export class UserService {
                                               <table border="0" cellpadding="0" cellspacing="0">
                                                   <tr>
                                                       <td align="center">
-                                                          <img src="https://i.ibb.co.com/ZRsDkGxS/favicon2.png" width="36px" height="36px" style="margin-right: 10px; vertical-align: middle;">
+                                                          <img src="cid:${EMAIL_LOGO_CID}" alt="Proxy.Luxe" width="44" height="44" style="display: inline-block; margin-right: 10px; vertical-align: middle; border: 0;">
                                                           <span style="font-size: 26px; font-weight: bold; color: #f3d675; letter-spacing: 1px; vertical-align: middle;">PROXY.LUXE</span>
                                                       </td>
                                                   </tr>
@@ -950,6 +956,7 @@ export class UserService {
       to: 'admin@proxy.luxe',
       subject: 'Новое сообщение в поддержку',
       html,
+      attachments: [getEmailLogoAttachment()],
     };
 
     await transporter.sendMail(mailOptions);
@@ -1015,7 +1022,14 @@ export class UserService {
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #000000; border-radius: 10px; overflow: hidden; color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
                   <tr>
                     <td align="center" style="padding: 25px 0; border-bottom: 2px solid #f3d675;">
-                      <img src="https://proxy.luxe/email-logo.png" alt="Proxy.Luxe" width="180" height="53" style="display: block; border: 0;" />
+                      <table border="0" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="padding-right: 12px; vertical-align: middle;">
+                            <img src="cid:${EMAIL_LOGO_CID}" alt="Proxy.Luxe" width="52" height="52" style="display: block; border: 0;" />
+                          </td>
+                          <td style="font-size: 26px; font-weight: bold; color: #f3d675; vertical-align: middle;">PROXY.LUXE</td>
+                        </tr>
+                      </table>
                     </td>
                   </tr>
 
@@ -1072,6 +1086,7 @@ export class UserService {
         to: email,
         subject,
         html,
+        attachments: [getEmailLogoAttachment()],
       });
     }
   }

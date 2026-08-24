@@ -17,6 +17,10 @@ import { UserService } from '../user/user.service';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResetPasswordEmailDto } from './dto/reset-email.dto';
 import * as nodemailer from 'nodemailer';
+import {
+  EMAIL_LOGO_CID,
+  getEmailLogoAttachment,
+} from '../shared/email-assets';
 
 interface JwtPayload {
   sub: string;
@@ -328,7 +332,14 @@ export class AuthService {
                                                     <table border="0" cellpadding="0" cellspacing="0">
                                                         <tr>
                                                             <td align="center">
-                                                                <img src="https://proxy.luxe/email-logo.png" alt="Proxy.Luxe" width="180" height="53" style="display: block; border: 0;" />
+                                                                <table border="0" cellpadding="0" cellspacing="0">
+                                                                    <tr>
+                                                                        <td style="padding-right: 12px; vertical-align: middle;">
+                                                                            <img src="cid:${EMAIL_LOGO_CID}" alt="Proxy.Luxe" width="52" height="52" style="display: block; border: 0;" />
+                                                                        </td>
+                                                                        <td style="font-size: 26px; font-weight: bold; color: #f3d675; vertical-align: middle;">PROXY.LUXE</td>
+                                                                    </tr>
+                                                                </table>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -431,7 +442,14 @@ export class AuthService {
                                                 <table border="0" cellpadding="0" cellspacing="0">
                                                     <tr>
                                                         <td align="center">
-                                                            <img src="https://proxy.luxe/email-logo.png" alt="Proxy.Luxe" width="180" height="53" style="display: block; border: 0;" />
+                                                            <table border="0" cellpadding="0" cellspacing="0">
+                                                                <tr>
+                                                                    <td style="padding-right: 12px; vertical-align: middle;">
+                                                                        <img src="cid:${EMAIL_LOGO_CID}" alt="Proxy.Luxe" width="52" height="52" style="display: block; border: 0;" />
+                                                                    </td>
+                                                                    <td style="font-size: 26px; font-weight: bold; color: #f3d675; vertical-align: middle;">PROXY.LUXE</td>
+                                                                </tr>
+                                                            </table>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -512,6 +530,7 @@ export class AuthService {
           ? `Для смены пароля перейдите по ссылке: ${resetLink}`
           : `Reset your password using this link: ${resetLink}`,
       html: emailTemplate,
+      attachments: [getEmailLogoAttachment()],
     };
 
     await transporter.sendMail(mailOptions);

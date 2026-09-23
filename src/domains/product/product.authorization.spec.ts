@@ -174,6 +174,37 @@ describe('ProductService IP authorizations', () => {
     });
   });
 
+  it('resolves the selected proxy order number within an owned provider order', async () => {
+    proxySeller.get.mockResolvedValue({
+      data: {
+        status: 'success',
+        data: {
+          items: [
+            {
+              id: 'proxy-1',
+              order_id: 5094738,
+              order_number: '5094738_111111111',
+            },
+            {
+              id: 'proxy-2',
+              order_id: 5094738,
+              order_number: '5094738_222222222',
+            },
+            {
+              id: 'proxy-3',
+              order_id: 9999999,
+              order_number: '9999999_333333333',
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(
+      service.findOrderNumber('isp', '5094738', 'proxy-2'),
+    ).resolves.toBe('5094738_222222222');
+  });
+
   it('returns only sanitized IP authorizations for the exact provider order number', async () => {
     proxySeller.get.mockResolvedValue({
       data: {

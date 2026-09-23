@@ -63,9 +63,14 @@ export class UserController {
   @UseGuards(AuthGuard('jwt'))
   async getIpAuthorizations(
     @Param('orderId') orderId: string,
+    @Query('providerProxyId') providerProxyId: string | undefined,
     @Request() request,
   ) {
-    return this.userService.getIpAuthorizations(request.user.id, orderId);
+    return this.userService.getIpAuthorizations(
+      request.user.id,
+      orderId,
+      providerProxyId,
+    );
   }
 
   @Post('orders/:orderId/ip-authorizations')
@@ -79,6 +84,7 @@ export class UserController {
       request.user.id,
       orderId,
       body.ip,
+      body.providerProxyId,
     );
   }
 
@@ -87,12 +93,14 @@ export class UserController {
   async deleteIpAuthorization(
     @Param('orderId') orderId: string,
     @Param('authorizationId') authorizationId: string,
+    @Query('providerProxyId') providerProxyId: string | undefined,
     @Request() request,
   ) {
     return this.userService.deleteIpAuthorization(
       request.user.id,
       orderId,
       authorizationId,
+      providerProxyId,
     );
   }
 

@@ -4,7 +4,7 @@
 
 **Goal:** Deliver secure IP authorization creation, listing, and deletion for paid IPv6, ISP, and resident proxy orders.
 
-**Architecture:** The backend owns provider identifiers and exposes order-scoped endpoints. It resolves the authenticated user's paid order, validates its proxy type, and calls Proxy-Seller with the stored exact `orderNumber`; frontend controls send only the application order ID and IP. Existing management UI from the prior feature branch is rebased onto the latest frontend and refined to use the order-scoped create endpoint.
+**Architecture:** The backend owns provider order-number resolution and exposes order-scoped endpoints. It resolves the authenticated user's paid order, validates its proxy type, and calls Proxy-Seller with the exact `orderNumber`. Frontend controls send the application order ID, IP, and the selected non-sensitive provider row ID for ISP/IPv6; the backend verifies that row belongs to the owned provider order. Existing management UI from the prior feature branch is rebased onto the latest frontend and refined to use the order-scoped create endpoint.
 
 **Tech Stack:** NestJS, Prisma, Jest, Next.js, TanStack Query, Vitest, Proxy-Seller API v1.
 
@@ -14,7 +14,7 @@
 
 - Permit only paid orders owned by the authenticated user with type `ipv6`, `isp`, or `resident`.
 - Never trust a provider order number from the browser for the new endpoint.
-- Match provider authorizations by exact stored `orderNumber`.
+- Match provider authorizations by the exact stored or ownership-verified `orderNumber`.
 - Preserve the legacy create endpoint for compatibility.
 - Do not expose provider API keys, credentials, or unrelated authorizations.
 
@@ -40,11 +40,11 @@
 
 **Interfaces:**
 - Consumes: authenticated user ID, application order ID, validated IP string.
-- Produces: `UserService.createIpAuthorization(userId, orderId, ip)`, exact-order-number `ProductService` create/list/delete behavior, and the order-scoped POST controller route.
+- Produces: order-scoped create/list/delete methods with optional selected provider row IDs, exact-order-number `ProductService` behavior, and the order-scoped POST controller route.
 
 - [ ] **Step 1: Write failing backend tests**
 
-Add tests proving exact `orderNumber` filtering, resident support when `proxySellerId` differs, supported-type enforcement, order ownership, and the new controller/service create flow.
+Add tests proving exact `orderNumber` filtering, correct row selection for multi-proxy orders, resident support when `proxySellerId` differs, supported-type enforcement, order ownership, and the new controller/service create flow.
 
 - [ ] **Step 2: Run backend tests to verify RED**
 
@@ -86,7 +86,7 @@ Commit: `feat: scope IP authorization to supported proxy orders`
 
 **Interfaces:**
 - Consumes: backend order-scoped create/list/delete routes and proxy rows containing `orderId`.
-- Produces: `ipAuthorizations.create(orderId, ip)`, supported-type key action, and a responsive popup with create/list/delete controls.
+- Produces: `ipAuthorizations.create(orderId, ip, providerProxyId?)`, supported-type key action, and a responsive popup with create/list/delete controls.
 
 - [ ] **Step 1: Integrate the prior management UI commits**
 
@@ -94,7 +94,7 @@ Cherry-pick the three existing commits onto latest `origin/spark-fixes`, resolvi
 
 - [ ] **Step 2: Write failing frontend tests**
 
-Add tests that expect `POST /api/v1/user/orders/:orderId/ip-authorizations`, query invalidation after create, and key-action eligibility only for `ipv6`, `isp`, and `resident` rows with an internal order ID.
+Add tests that expect `POST /api/v1/user/orders/:orderId/ip-authorizations`, selected-row propagation for ISP/IPv6, query invalidation after create, and key-action eligibility only for resolvable `ipv6`, `isp`, and `resident` rows.
 
 - [ ] **Step 3: Run frontend tests to verify RED**
 
@@ -104,7 +104,7 @@ Expected: FAIL because creation still uses the legacy endpoint and the action is
 
 - [ ] **Step 4: Implement frontend contract**
 
-Move creation into the authorization API module, pass only `orderId` and `ip`, invalidate the affected query, and constrain the action to the three supported types.
+Move creation into the authorization API module, pass `orderId`, `ip`, and the selected ISP/IPv6 row ID, invalidate the affected row query, and constrain the action to the three supported types.
 
 - [ ] **Step 5: Run frontend tests/build and commit**
 

@@ -153,6 +153,83 @@ describe('UserService IP authorizations', () => {
     });
   });
 
+  it('uses the selected proxy row when one ISP order contains multiple proxies', async () => {
+    prisma.order.findFirst.mockResolvedValue({
+      id: 'app-order-1',
+      userId: 'user-1',
+      type: Proxy.isp,
+      proxySellerId: '5094738',
+      orderNumber: '5094738_111111111',
+      status: PaymentStatus.PAID,
+    });
+    productService.findOrderNumber.mockResolvedValue('5094738_222222222');
+    productService.createIpAuthorization.mockResolvedValue({
+      status: 'success',
+    });
+
+    await service.createIpAuthorization(
+      'user-1',
+      'app-order-1',
+      '203.0.113.10',
+      'proxy-2',
+    );
+
+    expect(productService.findOrderNumber).toHaveBeenCalledWith(
+      Proxy.isp,
+      '5094738',
+      'proxy-2',
+    );
+    expect(productService.createIpAuthorization).toHaveBeenCalledWith(
+      '5094738_222222222',
+      '203.0.113.10',
+    );
+  });
+
+  it('lists authorizations for the selected IPv6 row instead of the stored first row', async () => {
+    prisma.order.findFirst.mockResolvedValue({
+      id: 'app-order-1',
+      userId: 'user-1',
+      type: Proxy.ipv6,
+      proxySellerId: '5094738',
+      orderNumber: '5094738_111111111',
+      status: PaymentStatus.PAID,
+    });
+    productService.findOrderNumber.mockResolvedValue('5094738_222222222');
+    productService.getIpAuthorizations.mockResolvedValue([]);
+
+    await service.getIpAuthorizations(
+      'user-1',
+      'app-order-1',
+      'proxy-2',
+    );
+
+    expect(productService.getIpAuthorizations).toHaveBeenCalledWith(
+      '5094738_222222222',
+    );
+  });
+
+  it('rejects a selected proxy row that is not part of the owned order', async () => {
+    prisma.order.findFirst.mockResolvedValue({
+      id: 'app-order-1',
+      userId: 'user-1',
+      type: Proxy.isp,
+      proxySellerId: '5094738',
+      orderNumber: '5094738_111111111',
+      status: PaymentStatus.PAID,
+    });
+    productService.findOrderNumber.mockResolvedValue(null);
+
+    await expect(
+      service.getIpAuthorizations(
+        'user-1',
+        'app-order-1',
+        'other-order-proxy',
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+
+    expect(productService.getIpAuthorizations).not.toHaveBeenCalled();
+  });
+
   it('returns 404 without calling the provider when the order is missing or not owned', async () => {
     prisma.order.findFirst.mockResolvedValue(null);
 

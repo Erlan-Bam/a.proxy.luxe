@@ -13,18 +13,18 @@ Customers can create, inspect, and remove Proxy-Seller IP authorizations for pai
 
 ## Application Contract
 
-- The browser sends the internal application order ID, never a provider order number supplied by the user.
+- The browser sends the internal application order ID and, for ISP/IPv6 rows, the non-sensitive provider proxy item ID. It never sends a provider order number supplied by the user.
 - The backend resolves a paid order owned by the authenticated user and permits only `ipv6`, `isp`, or `resident`.
-- The stored provider `orderNumber` is the authorization boundary. This is required for resident orders because their `proxySellerId` is a package key rather than the provider order ID prefix.
+- The provider `orderNumber` is the authorization boundary. Resident orders use the stored exact value because their `proxySellerId` is a package key. ISP/IPv6 rows resolve the selected proxy item's exact value from Proxy-Seller and verify its `order_id` against the owned order.
 - Legacy ISP/IPv6 orders with a missing stored `orderNumber` may be backfilled from the owned provider proxy list.
 - Creation, listing, and deletion remain scoped to the authenticated user's exact order.
 - IP input accepts valid IPv4 and IPv6 addresses through backend validation.
 
 ## Interface
 
-- `POST /v1/user/orders/:orderId/ip-authorizations` body: `{ "ip": "203.0.113.10" }`.
-- `GET /v1/user/orders/:orderId/ip-authorizations` response: `{ "items": IpAuthorization[] }`.
-- `DELETE /v1/user/orders/:orderId/ip-authorizations/:authorizationId` response: `{ "success": true }`.
+- `POST /v1/user/orders/:orderId/ip-authorizations` body: `{ "ip": "203.0.113.10", "providerProxyId": "optional-row-id" }`.
+- `GET /v1/user/orders/:orderId/ip-authorizations?providerProxyId=optional-row-id` response: `{ "items": IpAuthorization[] }`.
+- `DELETE /v1/user/orders/:orderId/ip-authorizations/:authorizationId?providerProxyId=optional-row-id` response: `{ "success": true }`.
 - The existing legacy `POST /v1/user/add-auth` endpoint remains compatible while the UI migrates to the order-scoped endpoint.
 
 ## User Experience
@@ -36,6 +36,6 @@ Customers can create, inspect, and remove Proxy-Seller IP authorizations for pai
 
 ## Verification
 
-- Backend unit tests cover all three supported types, unsupported types, ownership, exact order-number filtering, resident package-key mismatch, provider errors, and deletion ownership.
+- Backend unit tests cover all three supported types, multi-proxy order row selection, unsupported types, ownership, exact order-number filtering, resident package-key mismatch, provider errors, and deletion ownership.
 - Frontend tests cover the order-scoped create request, cache invalidation, list/delete calls, supported-type action visibility, and popup behavior.
 - Production smoke tests confirm authenticated UI rendering and API health without exposing secrets or changing customer authorizations.

@@ -1110,7 +1110,11 @@ export class UserService {
     return await this.prisma.currency.findUnique({ where: { name: 'rub' } });
   }
 
-  private async getOwnedIpAuthorizationOrder(userId: string, orderId: string) {
+  private async getOwnedIpAuthorizationOrder(
+    userId: string,
+    orderId: string,
+    providerProxyId?: string,
+  ) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, userId, status: PaymentStatus.PAID },
       select: {
@@ -1133,13 +1137,33 @@ export class UserService {
     }
 
     let orderNumber = order.orderNumber;
+    const staticProxyType =
+      order.type === Proxy.isp || order.type === Proxy.ipv6
+        ? order.type
+        : null;
+
+    if (providerProxyId && staticProxyType) {
+      if (!order.proxySellerId) {
+        throw new HttpException('Order has no provider identifier', 400);
+      }
+
+      orderNumber = await this.productService.findOrderNumber(
+        staticProxyType,
+        order.proxySellerId,
+        providerProxyId,
+      );
+      if (!orderNumber) {
+        throw new HttpException('Proxy not found in this order', 404);
+      }
+    }
+
     if (
       !orderNumber &&
       order.proxySellerId &&
-      (order.type === Proxy.isp || order.type === Proxy.ipv6)
+      staticProxyType
     ) {
       orderNumber = await this.productService.findOrderNumber(
-        order.type,
+        staticProxyType,
         order.proxySellerId,
       );
       if (orderNumber) {
@@ -1157,13 +1181,30 @@ export class UserService {
     return { id: order.id, orderNumber };
   }
 
-  async createIpAuthorization(userId: string, orderId: string, ip: string) {
-    const order = await this.getOwnedIpAuthorizationOrder(userId, orderId);
+  async createIpAuthorization(
+    userId: string,
+    orderId: string,
+    ip: string,
+    providerProxyId?: string,
+  ) {
+    const order = await this.getOwnedIpAuthorizationOrder(
+      userId,
+      orderId,
+      providerProxyId,
+    );
     return this.productService.createIpAuthorization(order.orderNumber, ip);
   }
 
-  async getIpAuthorizations(userId: string, orderId: string) {
-    const order = await this.getOwnedIpAuthorizationOrder(userId, orderId);
+  async getIpAuthorizations(
+    userId: string,
+    orderId: string,
+    providerProxyId?: string,
+  ) {
+    const order = await this.getOwnedIpAuthorizationOrder(
+      userId,
+      orderId,
+      providerProxyId,
+    );
     const items = await this.productService.getIpAuthorizations(
       order.orderNumber,
     );
@@ -1174,8 +1215,13 @@ export class UserService {
     userId: string,
     orderId: string,
     authorizationId: string,
+    providerProxyId?: string,
   ) {
-    const order = await this.getOwnedIpAuthorizationOrder(userId, orderId);
+    const order = await this.getOwnedIpAuthorizationOrder(
+      userId,
+      orderId,
+      providerProxyId,
+    );
     const items = await this.productService.getIpAuthorizations(
       order.orderNumber,
     );

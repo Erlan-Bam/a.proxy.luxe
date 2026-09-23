@@ -26,6 +26,7 @@ import { PayoutPartner } from './dto/payout-partner.dto';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { FinishPayoutDto } from './dto/finish-payout.dto';
 import { DeletePromocodeDTO } from './dto/delete-promo.dto';
+import { CreateIpAuthorizationDto } from './dto/create-ip-authorization.dto';
 
 @Controller('v1/user')
 export class UserController {
@@ -65,6 +66,20 @@ export class UserController {
     @Request() request,
   ) {
     return this.userService.getIpAuthorizations(request.user.id, orderId);
+  }
+
+  @Post('orders/:orderId/ip-authorizations')
+  @UseGuards(AuthGuard('jwt'))
+  async createIpAuthorization(
+    @Param('orderId') orderId: string,
+    @Body() body: CreateIpAuthorizationDto,
+    @Request() request,
+  ) {
+    return this.userService.createIpAuthorization(
+      request.user.id,
+      orderId,
+      body.ip,
+    );
   }
 
   @Delete('orders/:orderId/ip-authorizations/:authorizationId')

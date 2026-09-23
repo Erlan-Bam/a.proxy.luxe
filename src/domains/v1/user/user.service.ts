@@ -1,7 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../shared/prisma.service';
 import * as nodemailer from 'nodemailer';
-import { PaymentStatus, Prisma, User, UserType } from '@prisma/client';
+import { PaymentStatus, Prisma, Proxy, User, UserType } from '@prisma/client';
 import { AddBalanceDTO } from './dto/add-balance.dto';
 import { RemoveBalanceDTO } from './dto/remove-balance.dto';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -13,10 +13,7 @@ import { AddAuthDto } from './dto/add-auth.dto';
 import { ProductService } from '../../product/product.service';
 import { PayoutPartner } from './dto/payout-partner.dto';
 import axios from 'axios';
-import {
-  EMAIL_LOGO_CID,
-  getEmailLogoAttachment,
-} from '../shared/email-assets';
+import { EMAIL_LOGO_CID, getEmailLogoAttachment } from '../shared/email-assets';
 
 @Injectable()
 export class UserService {
@@ -1113,24 +1110,62 @@ export class UserService {
     return await this.prisma.currency.findUnique({ where: { name: 'rub' } });
   }
 
-  private async getOwnedProviderOrder(userId: string, orderId: string) {
+  private async getOwnedIpAuthorizationOrder(userId: string, orderId: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, userId, status: PaymentStatus.PAID },
-      select: { id: true, proxySellerId: true },
+      select: {
+        id: true,
+        type: true,
+        orderNumber: true,
+        proxySellerId: true,
+      },
     });
     if (!order) {
       throw new HttpException('Order not found', 404);
     }
-    if (!order.proxySellerId) {
-      throw new HttpException('Order has no provider identifier', 400);
+
+    const supportedTypes: Proxy[] = [Proxy.ipv6, Proxy.isp, Proxy.resident];
+    if (!supportedTypes.includes(order.type)) {
+      throw new HttpException(
+        'IP authorization is not supported for this proxy type',
+        400,
+      );
     }
-    return { id: order.id, proxySellerId: order.proxySellerId };
+
+    let orderNumber = order.orderNumber;
+    if (
+      !orderNumber &&
+      order.proxySellerId &&
+      (order.type === Proxy.isp || order.type === Proxy.ipv6)
+    ) {
+      orderNumber = await this.productService.findOrderNumber(
+        order.type,
+        order.proxySellerId,
+      );
+      if (orderNumber) {
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { orderNumber },
+        });
+      }
+    }
+
+    if (!orderNumber) {
+      throw new HttpException('Order has no provider order number', 400);
+    }
+
+    return { id: order.id, orderNumber };
+  }
+
+  async createIpAuthorization(userId: string, orderId: string, ip: string) {
+    const order = await this.getOwnedIpAuthorizationOrder(userId, orderId);
+    return this.productService.createIpAuthorization(order.orderNumber, ip);
   }
 
   async getIpAuthorizations(userId: string, orderId: string) {
-    const order = await this.getOwnedProviderOrder(userId, orderId);
+    const order = await this.getOwnedIpAuthorizationOrder(userId, orderId);
     const items = await this.productService.getIpAuthorizations(
-      order.proxySellerId,
+      order.orderNumber,
     );
     return { items };
   }
@@ -1140,9 +1175,9 @@ export class UserService {
     orderId: string,
     authorizationId: string,
   ) {
-    const order = await this.getOwnedProviderOrder(userId, orderId);
+    const order = await this.getOwnedIpAuthorizationOrder(userId, orderId);
     const items = await this.productService.getIpAuthorizations(
-      order.proxySellerId,
+      order.orderNumber,
     );
     if (!items.some((item) => item.id === authorizationId)) {
       throw new HttpException('IP authorization not found', 404);

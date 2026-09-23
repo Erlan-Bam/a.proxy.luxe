@@ -104,6 +104,18 @@ export class ProductService {
         });
       }
 
+      return this.createIpAuthorization(orderNumber, ip);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException('Failed to create IP authorization', 502);
+    }
+  }
+
+  async createIpAuthorization(orderNumber: string, ip: string) {
+    try {
       const response = await this.proxySeller.post('/auth/add/ip', {
         orderNumber,
         ip,
@@ -130,8 +142,28 @@ export class ProductService {
     }
   }
 
-  async getIpAuthorizations(
+  async findOrderNumber(
+    type: 'isp' | 'ipv6',
     providerOrderId: string,
+  ): Promise<string | null> {
+    const response = await this.proxySeller.get(`/proxy/list/${type}`);
+    if (response.data?.status !== 'success') {
+      throw new HttpException('Unable to resolve provider order number', 502);
+    }
+
+    const items = response.data?.data?.items;
+    if (!Array.isArray(items)) {
+      return null;
+    }
+
+    const proxy = items.find(
+      (item: any) => String(item.order_id) === String(providerOrderId),
+    );
+    return typeof proxy?.order_number === 'string' ? proxy.order_number : null;
+  }
+
+  async getIpAuthorizations(
+    orderNumber: string,
   ): Promise<IpAuthorizationRdo[]> {
     const response = await this.proxySeller.get('/auth/list');
     if (response.data?.status !== 'success') {
@@ -144,7 +176,7 @@ export class ProductService {
         (item: any) =>
           typeof item.ip === 'string' &&
           item.ip.length > 0 &&
-          String(item.orderNumber || '').split('_')[0] === providerOrderId,
+          String(item.orderNumber || '') === orderNumber,
       )
       .map((item: any) => ({
         id: String(item.id),

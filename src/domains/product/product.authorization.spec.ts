@@ -135,6 +135,7 @@ describe('ProductService IP authorizations', () => {
   let service: ProductService;
   let proxySeller: {
     get: jest.Mock;
+    post: jest.Mock;
     delete: jest.Mock;
   };
 
@@ -142,12 +143,38 @@ describe('ProductService IP authorizations', () => {
     service = new ProductService({ get: jest.fn() } as any, {} as any);
     proxySeller = {
       get: jest.fn(),
+      post: jest.fn(),
       delete: jest.fn(),
     };
     (service as any).proxySeller = proxySeller;
   });
 
-  it('returns only sanitized IP authorizations for the requested provider order', async () => {
+  it('creates an IP authorization for the exact provider order number', async () => {
+    proxySeller.post.mockResolvedValue({
+      data: {
+        status: 'success',
+        data: {
+          id: 'ip-auth-1',
+          active: true,
+          ip: '2001:db8::1',
+          orderNumber: '5094738_108303894',
+        },
+        errors: [],
+      },
+    });
+
+    await expect(
+      service.createIpAuthorization('5094738_108303894', '2001:db8::1'),
+    ).resolves.toMatchObject({
+      status: 'success',
+      data: {
+        ip: '2001:db8::1',
+        orderNumber: '5094738_108303894',
+      },
+    });
+  });
+
+  it('returns only sanitized IP authorizations for the exact provider order number', async () => {
     proxySeller.get.mockResolvedValue({
       data: {
         status: 'success',
@@ -169,14 +196,16 @@ describe('ProductService IP authorizations', () => {
             id: 'other-order-ip',
             active: true,
             ip: '203.0.113.20',
-            orderNumber: '9999999_100',
+            orderNumber: '5094738_999999999',
           },
         ],
         errors: [],
       },
     });
 
-    await expect(service.getIpAuthorizations('5094738')).resolves.toEqual([
+    await expect(
+      service.getIpAuthorizations('5094738_108303894'),
+    ).resolves.toEqual([
       {
         id: 'ip-auth-1',
         active: true,

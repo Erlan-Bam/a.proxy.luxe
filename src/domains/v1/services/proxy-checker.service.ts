@@ -4,6 +4,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import * as tunnel from 'tunnel';
 import * as net from 'net';
+import { formatProxyUrl } from './proxy-address';
 
 @Injectable()
 export class ProxyCheckerService {
@@ -136,35 +137,40 @@ export class ProxyCheckerService {
             if (login && password) {
               agentCandidates.push(
                 new SocksProxyAgent(
-                  `socks5h://${login}:${password}@${ip}:${port}`,
+                  formatProxyUrl('socks5h', ip, port, login, password),
                 ),
               );
               agentCandidates.push(
                 new SocksProxyAgent(
-                  `socks5://${login}:${password}@${ip}:${port}`,
+                  formatProxyUrl('socks5', ip, port, login, password),
                 ),
               );
               // Also try SOCKS4
               agentCandidates.push(
                 new SocksProxyAgent(
-                  `socks4://${login}:${password}@${ip}:${port}`,
+                  formatProxyUrl('socks4', ip, port, login, password),
                 ),
               );
             }
             // Also try without auth (some SOCKS5 use IP whitelist)
             agentCandidates.push(
-              new SocksProxyAgent(`socks5h://${ip}:${port}`),
+              new SocksProxyAgent(formatProxyUrl('socks5h', ip, port)),
             );
             agentCandidates.push(
-              new SocksProxyAgent(`socks5://${ip}:${port}`),
+              new SocksProxyAgent(formatProxyUrl('socks5', ip, port)),
             );
           } else {
             // HTTP(s) proxy
-            const isIpv6 = raw.includes('[');
-            const host = isIpv6 ? `[${ip}]` : ip;
+            const isIpv6 = ip.includes(':');
 
             if (login && password) {
-              const proxyUrl = `http://${login}:${password}@${host}:${port}`;
+              const proxyUrl = formatProxyUrl(
+                'http',
+                ip,
+                port,
+                login,
+                password,
+              );
               agentCandidates.push(new HttpsProxyAgent(proxyUrl));
               if (!isIpv6) {
                 agentCandidates.push(
@@ -178,7 +184,7 @@ export class ProxyCheckerService {
                 );
               }
             } else {
-              const proxyUrl = `http://${host}:${port}`;
+              const proxyUrl = formatProxyUrl('http', ip, port);
               agentCandidates.push(new HttpsProxyAgent(proxyUrl));
               if (!isIpv6) {
                 agentCandidates.push(

@@ -1142,7 +1142,11 @@ export class UserService {
         ? order.type
         : null;
 
-    if (providerProxyId && staticProxyType) {
+    if (staticProxyType && !providerProxyId) {
+      throw new HttpException('Provider proxy ID is required', 400);
+    }
+
+    if (staticProxyType) {
       if (!order.proxySellerId) {
         throw new HttpException('Order has no provider identifier', 400);
       }
@@ -1150,27 +1154,10 @@ export class UserService {
       orderNumber = await this.productService.findOrderNumber(
         staticProxyType,
         order.proxySellerId,
-        providerProxyId,
+        providerProxyId as string,
       );
       if (!orderNumber) {
         throw new HttpException('Proxy not found in this order', 404);
-      }
-    }
-
-    if (
-      !orderNumber &&
-      order.proxySellerId &&
-      staticProxyType
-    ) {
-      orderNumber = await this.productService.findOrderNumber(
-        staticProxyType,
-        order.proxySellerId,
-      );
-      if (orderNumber) {
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: { orderNumber },
-        });
       }
     }
 

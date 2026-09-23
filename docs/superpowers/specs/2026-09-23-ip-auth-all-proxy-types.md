@@ -16,7 +16,7 @@ Customers can create, inspect, and remove Proxy-Seller IP authorizations for pai
 - The browser sends the internal application order ID and, for ISP/IPv6 rows, the non-sensitive provider proxy item ID. It never sends a provider order number supplied by the user.
 - The backend resolves a paid order owned by the authenticated user and permits only `ipv6`, `isp`, or `resident`.
 - The provider `orderNumber` is the authorization boundary. Resident orders use the stored exact value because their `proxySellerId` is a package key. ISP/IPv6 rows resolve the selected proxy item's exact value from Proxy-Seller and verify its `order_id` against the owned order.
-- Legacy ISP/IPv6 orders with a missing stored `orderNumber` may be backfilled from the owned provider proxy list.
+- ISP/IPv6 order numbers are resolved per selected provider row, including legacy orders whose single stored `orderNumber` is missing.
 - Creation, listing, and deletion remain scoped to the authenticated user's exact order.
 - IP input accepts valid IPv4 and IPv6 addresses through backend validation.
 

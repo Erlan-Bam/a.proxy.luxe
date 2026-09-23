@@ -93,9 +93,21 @@ describe('UserService IP authorizations', () => {
           orderNumber: '5094738_108303894',
         },
       });
+      const providerProxyId =
+        type === Proxy.resident ? undefined : 'proxy-1';
+      if (providerProxyId) {
+        productService.findOrderNumber.mockResolvedValue(
+          '5094738_108303894',
+        );
+      }
 
       await expect(
-        service.createIpAuthorization('user-1', 'app-order-1', '2001:db8::1'),
+        service.createIpAuthorization(
+          'user-1',
+          'app-order-1',
+          '2001:db8::1',
+          providerProxyId,
+        ),
       ).resolves.toMatchObject({ status: 'success' });
 
       expect(productService.createIpAuthorization).toHaveBeenCalledWith(
@@ -122,7 +134,7 @@ describe('UserService IP authorizations', () => {
     expect(productService.createIpAuthorization).not.toHaveBeenCalled();
   });
 
-  it('backfills a legacy ISP order number before creating authorization', async () => {
+  it('resolves a selected proxy row for a legacy ISP order', async () => {
     prisma.order.findFirst.mockResolvedValue({
       id: 'app-order-1',
       userId: 'user-1',
@@ -141,16 +153,15 @@ describe('UserService IP authorizations', () => {
       'user-1',
       'app-order-1',
       '203.0.113.10',
+      'proxy-1',
     );
 
     expect(productService.findOrderNumber).toHaveBeenCalledWith(
       Proxy.isp,
       '5094738',
+      'proxy-1',
     );
-    expect(prisma.order.update).toHaveBeenCalledWith({
-      where: { id: 'app-order-1' },
-      data: { orderNumber: '5094738_108303894' },
-    });
+    expect(prisma.order.update).not.toHaveBeenCalled();
   });
 
   it('uses the selected proxy row when one ISP order contains multiple proxies', async () => {
@@ -230,6 +241,41 @@ describe('UserService IP authorizations', () => {
     expect(productService.getIpAuthorizations).not.toHaveBeenCalled();
   });
 
+  it.each(['create', 'list', 'delete'] as const)(
+    'rejects ISP %s without a selected provider proxy row',
+    async (operation) => {
+      prisma.order.findFirst.mockResolvedValue({
+        id: 'app-order-1',
+        userId: 'user-1',
+        type: Proxy.isp,
+        proxySellerId: '5094738',
+        orderNumber: '5094738_111111111',
+        status: PaymentStatus.PAID,
+      });
+
+      const request =
+        operation === 'create'
+          ? service.createIpAuthorization(
+              'user-1',
+              'app-order-1',
+              '203.0.113.10',
+            )
+          : operation === 'list'
+            ? service.getIpAuthorizations('user-1', 'app-order-1')
+            : service.deleteIpAuthorization(
+                'user-1',
+                'app-order-1',
+                'ip-auth-1',
+              );
+
+      await expect(request).rejects.toMatchObject({ status: 400 });
+      expect(productService.findOrderNumber).not.toHaveBeenCalled();
+      expect(productService.createIpAuthorization).not.toHaveBeenCalled();
+      expect(productService.getIpAuthorizations).not.toHaveBeenCalled();
+      expect(productService.deleteIpAuthorization).not.toHaveBeenCalled();
+    },
+  );
+
   it('returns 404 without calling the provider when the order is missing or not owned', async () => {
     prisma.order.findFirst.mockResolvedValue(null);
 
@@ -249,7 +295,7 @@ describe('UserService IP authorizations', () => {
     });
 
     await expect(
-      service.getIpAuthorizations('user-1', 'app-order-1'),
+      service.getIpAuthorizations('user-1', 'app-order-1', 'proxy-1'),
     ).rejects.toMatchObject({ status: 400 });
 
     expect(productService.getIpAuthorizations).not.toHaveBeenCalled();
@@ -300,6 +346,43 @@ describe('UserService IP authorizations', () => {
 
     expect(productService.deleteIpAuthorization).toHaveBeenCalledWith(
       'ip-auth-1',
+    );
+  });
+
+  it('deletes an authorization from the selected ISP row', async () => {
+    prisma.order.findFirst.mockResolvedValue({
+      id: 'app-order-1',
+      type: Proxy.isp,
+      proxySellerId: '5094738',
+      orderNumber: '5094738_111111111',
+    });
+    productService.findOrderNumber.mockResolvedValue('5094738_222222222');
+    productService.getIpAuthorizations.mockResolvedValue([
+      {
+        id: 'ip-auth-2',
+        active: true,
+        ip: '203.0.113.20',
+        orderNumber: '5094738_222222222',
+      },
+    ]);
+
+    await service.deleteIpAuthorization(
+      'user-1',
+      'app-order-1',
+      'ip-auth-2',
+      'proxy-2',
+    );
+
+    expect(productService.findOrderNumber).toHaveBeenCalledWith(
+      Proxy.isp,
+      '5094738',
+      'proxy-2',
+    );
+    expect(productService.getIpAuthorizations).toHaveBeenCalledWith(
+      '5094738_222222222',
+    );
+    expect(productService.deleteIpAuthorization).toHaveBeenCalledWith(
+      'ip-auth-2',
     );
   });
 

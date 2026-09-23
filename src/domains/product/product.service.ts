@@ -145,7 +145,7 @@ export class ProductService {
   async findOrderNumber(
     type: 'isp' | 'ipv6',
     providerOrderId: string,
-    providerProxyId?: string,
+    providerProxyId: string,
   ): Promise<string | null> {
     const response = await this.proxySeller.get(`/proxy/list/${type}`);
     if (response.data?.status !== 'success') {
@@ -161,7 +161,7 @@ export class ProductService {
       const belongsToOrder =
         String(item.order_id) === String(providerOrderId);
       const isSelectedProxy =
-        !providerProxyId || String(item.id) === String(providerProxyId);
+        String(item.id) === String(providerProxyId);
 
       return belongsToOrder && isSelectedProxy;
     });

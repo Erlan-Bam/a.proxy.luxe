@@ -54,7 +54,7 @@ Expected: FAIL because the order-scoped create service and exact order-number lo
 
 - [ ] **Step 3: Implement the backend contract**
 
-Create the IP-only DTO, resolve owned orders with `type` and `orderNumber`, backfill eligible legacy ISP/IPv6 order numbers, filter `/auth/list` by exact order number, and add `POST orders/:orderId/ip-authorizations`.
+Create the IP-only DTO, resolve owned orders with `type` and `orderNumber`, resolve the selected ISP/IPv6 row through the provider list, filter `/auth/list` by exact order number, and add `POST orders/:orderId/ip-authorizations`.
 
 - [ ] **Step 4: Run backend tests to verify GREEN**
 

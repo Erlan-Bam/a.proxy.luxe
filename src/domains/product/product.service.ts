@@ -724,7 +724,7 @@ export class ProductService {
   }
 
   async getGeoReference() {
-    const filePath = path.join(process.cwd(), 'src', 'uploads', 'geo.json');
+    const filePath = path.resolve(__dirname, '../../uploads/geo.json');
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const geoData = JSON.parse(fileContent);
     return geoData;

@@ -129,6 +129,7 @@ export class PaymentService {
         goal: true,
         type: true,
         orderId: true,
+        orderNumber: true,
       },
       orderBy: { createdAt: 'desc' },
     });

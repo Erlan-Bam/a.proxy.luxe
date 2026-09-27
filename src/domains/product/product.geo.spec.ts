@@ -1,6 +1,5 @@
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
-import * as path from 'path';
 import { ProductService } from './product.service';
 
 describe('ProductService.getGeoReference', () => {
@@ -8,20 +7,34 @@ describe('ProductService.getGeoReference', () => {
     jest.restoreAllMocks();
   });
 
-  it('loads the bundled geo reference independently of the working directory', async () => {
+  it('serves the bundled reference without a runtime uploads directory', async () => {
     const service = new ProductService(
-      { get: jest.fn().mockReturnValue('test-key') } as unknown as ConfigService,
+      {
+        get: jest.fn().mockReturnValue('test-key'),
+      } as unknown as ConfigService,
       {} as any,
     );
-    const expectedPath = path.resolve(__dirname, '../../uploads/geo.json');
-    const readFile = jest
-      .spyOn(fs, 'readFileSync')
-      .mockReturnValue('[{"code":"US","name":"United States"}]');
+    const readFile = fs.readFileSync.bind(fs);
+    jest.spyOn(fs, 'readFileSync').mockImplementation((file, options) => {
+      if (String(file).includes('/uploads/')) {
+        throw Object.assign(new Error('uploads is absent from this release'), {
+          code: 'ENOENT',
+        });
+      }
+      return readFile(file, options);
+    });
     jest.spyOn(process, 'cwd').mockReturnValue('/unrelated-runtime-directory');
 
-    await expect(service.getGeoReference()).resolves.toEqual([
-      { code: 'US', name: 'United States' },
-    ]);
-    expect(readFile).toHaveBeenCalledWith(expectedPath, 'utf-8');
+    const countries = await service.getGeoReference();
+    expect(countries.length).toBeGreaterThan(200);
+    expect(countries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'US', name: 'United States' }),
+        expect.objectContaining({ code: 'UZ', name: 'Uzbekistan' }),
+      ]),
+    );
+    expect(
+      countries.find((country) => country.code === 'UZ')?.regions.length,
+    ).toBeGreaterThan(0);
   });
 });

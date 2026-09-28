@@ -16,8 +16,7 @@ import { ActiveProxy, ActiveProxyType } from './rdo/get-active-proxy.rdo';
 import { Proxy } from '@prisma/client';
 import { OrderInfo } from './dto/order.dto';
 import { PrismaService } from '../v1/shared/prisma.service';
-import * as path from 'path';
-import * as fs from 'fs';
+import geoReference = require('../../data/geo.json');
 import { ModifyProxyResidentDto } from './dto/modify-proxy.dto';
 import { ProlongDto } from './dto/prolog.dto';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -686,10 +685,7 @@ export class ProductService {
   }
 
   async getGeoReference() {
-    const filePath = path.join(process.cwd(), 'src', 'uploads', 'geo.json');
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
-    const geoData = JSON.parse(fileContent);
-    return geoData;
+    return geoReference;
   }
 
   async updateRotation(data: UpdateResident) {

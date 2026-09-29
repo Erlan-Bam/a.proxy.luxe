@@ -8,12 +8,21 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FinishOrderDto } from './dto/payment-order.dto';
-import { PaymentStatus } from '@prisma/client';
+import { PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../shared/prisma.service';
 import { ProductService } from '../../product/product.service';
 import { OrderInfo } from '../../product/dto/order.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { UserService } from '../user/user.service';
+
+type AdminLogParams = {
+  ordersPage: number;
+  ordersLimit: number | null;
+  paymentsPage: number;
+  paymentsLimit: number | null;
+  search?: string;
+  status?: PaymentStatus;
+};
 
 @Injectable()
 export class OrderService {
@@ -119,17 +128,10 @@ export class OrderService {
   }
 
   async generalLog(
-    paramsOrPage:
-      | {
-          ordersPage: number;
-          ordersLimit: number | null;
-          paymentsPage: number;
-          paymentsLimit: number | null;
-        }
-      | number = 1,
+    paramsOrPage: AdminLogParams | number = 1,
     legacyLimit = 50,
   ) {
-    const params =
+    const params: AdminLogParams =
       typeof paramsOrPage === 'object'
         ? paramsOrPage
         : {
@@ -140,9 +142,37 @@ export class OrderService {
           };
 
     const ordersPage = params.ordersLimit === null ? 1 : params.ordersPage;
-    const paymentsPage = params.paymentsLimit === null ? 1 : params.paymentsPage;
+    const paymentsPage =
+      params.paymentsLimit === null ? 1 : params.paymentsPage;
+    // Prisma contains uses SQL LIKE: treat characters in order numbers literally.
+    const search = params.search?.trim().replace(/[\\%_]/g, '\\$&');
+    const contains = { contains: search, mode: 'insensitive' as const };
+    const orderWhere: Prisma.OrderWhereInput = {
+      ...(params.status ? { status: params.status } : {}),
+      ...(search
+        ? {
+            OR: [
+              { id: contains },
+              { orderId: contains },
+              { orderNumber: contains },
+              { userId: contains },
+              { user: { email: contains } },
+            ],
+          }
+        : {}),
+    };
+    const paymentWhere: Prisma.PaymentWhereInput = search
+      ? {
+          OR: [
+            { id: contains },
+            { userId: contains },
+            { method: contains },
+            { user: { email: contains } },
+          ],
+        }
+      : {};
     const orderQuery = {
-      where: { status: 'PAID' as const },
+      where: orderWhere,
       include: {
         user: {
           select: {
@@ -150,7 +180,7 @@ export class OrderService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' as const },
+      orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
     };
     const ordersQuery =
       params.ordersLimit === null
@@ -161,7 +191,8 @@ export class OrderService {
             take: params.ordersLimit,
           });
     const paymentQuery = {
-      orderBy: { updatedAt: 'desc' as const },
+      where: paymentWhere,
+      orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
       include: {
         user: {
           select: {
@@ -182,13 +213,13 @@ export class OrderService {
     const [orders, totalOrders] = await this.prisma.$transaction([
       ordersQuery,
       this.prisma.order.count({
-        where: { status: 'PAID' },
+        where: orderWhere,
       }),
     ]);
 
     const [payments, totalPayments] = await this.prisma.$transaction([
       paymentsQuery,
-      this.prisma.payment.count(),
+      this.prisma.payment.count({ where: paymentWhere }),
     ]);
 
     const effectiveOrdersLimit = params.ordersLimit ?? totalOrders;

@@ -119,6 +119,107 @@ describe('OrderService admin log pagination', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.order.findMany.mockResolvedValue([]);
+    prisma.order.count.mockResolvedValue(0);
+    prisma.payment.findMany.mockResolvedValue([]);
+    prisma.payment.count.mockResolvedValue(0);
+  });
+
+  it('includes unpaid orders and sorts by the latest update with a stable tie-breaker', async () => {
+    await service.generalLog(2, 100);
+    expect(prisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {},
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip: 100,
+        take: 100,
+      }),
+    );
+    expect(prisma.order.count).toHaveBeenCalledWith({ where: {} });
+  });
+
+  it('searches provider numbers, both IDs, user ID and email before pagination', async () => {
+    const params = {
+      ordersPage: 1,
+      ordersLimit: 100,
+      paymentsPage: 1,
+      paymentsLimit: 100,
+      search: '  NS_1790692639225-Ls  ',
+    };
+    await service.generalLog(params);
+    const contains = { contains: 'NS\\_1790692639225-Ls', mode: 'insensitive' };
+    const where = {
+      OR: [
+        { id: contains },
+        { orderId: contains },
+        { orderNumber: contains },
+        { userId: contains },
+        { user: { email: contains } },
+      ],
+    };
+    expect(prisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where, skip: 0, take: 100 }),
+    );
+    expect(prisma.order.count).toHaveBeenCalledWith({ where });
+  });
+
+  it.each(['PENDING', 'PROCESSING', 'PAID', 'CANCELED'] as const)(
+    'filters %s without filtering payments by order status',
+    async (status) => {
+      const params = {
+        ordersPage: 1,
+        ordersLimit: 100,
+        paymentsPage: 1,
+        paymentsLimit: 100,
+        status,
+      };
+      await service.generalLog(params);
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { status } }),
+      );
+      expect(prisma.order.count).toHaveBeenCalledWith({ where: { status } });
+      expect(prisma.payment.count).toHaveBeenCalledWith({ where: {} });
+    },
+  );
+
+  it('searches payments by ID, user ID, email or method and counts only matches', async () => {
+    const params = {
+      ordersPage: 1,
+      ordersLimit: 100,
+      paymentsPage: 2,
+      paymentsLimit: 100,
+      search: ' Crypto% ',
+    };
+    prisma.payment.count.mockResolvedValue(101);
+    const result = await service.generalLog(params);
+    const contains = { contains: 'Crypto\\%', mode: 'insensitive' };
+    const where = {
+      OR: [
+        { id: contains },
+        { userId: contains },
+        { method: contains },
+        { user: { email: contains } },
+      ],
+    };
+    expect(prisma.payment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where, skip: 100, take: 100 }),
+    );
+    expect(prisma.payment.count).toHaveBeenCalledWith({ where });
+    expect(result.totalPaymentPages).toBe(2);
+  });
+
+  it('treats whitespace-only search as no filter', async () => {
+    const params = {
+      ordersPage: 1,
+      ordersLimit: null,
+      paymentsPage: 1,
+      paymentsLimit: null,
+      search: '   ',
+    };
+    const result = await service.generalLog(params);
+    expect(prisma.order.count).toHaveBeenCalledWith({ where: {} });
+    expect(result.totalOrderPages).toBe(0);
+    expect(result.totalPaymentPages).toBe(0);
   });
 
   it('returns all orders and payments when pagination is disabled', async () => {

@@ -9,12 +9,13 @@ import {
   Query,
   Delete,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FinishOrderDto } from './dto/payment-order.dto';
 import { AuthGuard } from '@nestjs/passport';
-import { UserType } from '@prisma/client';
+import { PaymentStatus, UserType } from '@prisma/client';
 
 const ADMIN_LOG_LIMIT_OPTIONS = [100, 200, 300] as const;
 
@@ -71,13 +72,15 @@ export class OrderController {
   @Get('admin/general-log')
   async generalLog(
     @Request() request,
-    @Query('ordersPage') ordersPage = '1',
-    @Query('ordersLimit') ordersLimit = '100',
-    @Query('paymentsPage') paymentsPage = '1',
-    @Query('paymentsLimit') paymentsLimit = '100',
+    @Query('ordersPage') ordersPage?: string,
+    @Query('ordersLimit') ordersLimit?: string,
+    @Query('paymentsPage') paymentsPage?: string,
+    @Query('paymentsLimit') paymentsLimit?: string,
     @Query('page') legacyPage?: string,
     @Query('limit') legacyLimit?: string,
     @Query('all') all = 'false',
+    @Query('search') search = '',
+    @Query('status') status = 'ALL',
   ) {
     if (request.user.type !== UserType.ADMIN) {
       throw new ForbiddenException('Access denied: Admins only');
@@ -86,6 +89,13 @@ export class OrderController {
     const fallbackPage = parsePositiveInt(legacyPage, 1);
     const fallbackLimit = parseAdminLogLimit(legacyLimit, 100);
     const showAll = all.toLowerCase() === 'true';
+    if (
+      typeof search !== 'string' ||
+      (status !== 'ALL' &&
+        !Object.values(PaymentStatus).includes(status as PaymentStatus))
+    ) {
+      throw new BadRequestException('Invalid log search or order status');
+    }
 
     return this.orderService.generalLog({
       ordersPage: parsePositiveInt(ordersPage, fallbackPage),
@@ -96,6 +106,8 @@ export class OrderController {
       paymentsLimit: showAll
         ? null
         : parseAdminLogLimit(paymentsLimit, fallbackLimit),
+      search,
+      status: status === 'ALL' ? undefined : (status as PaymentStatus),
     });
   }
 

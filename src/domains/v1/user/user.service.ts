@@ -533,10 +533,16 @@ export class UserService {
 
     amount = Math.min(amount, currentBalance);
 
-    return await this.prisma.user.update({
-      where: { email: email },
+    const debit = await this.prisma.user.updateMany({
+      where: { email, balance: { gte: amount } },
       data: { balance: { decrement: amount } },
     });
+    if (debit.count !== 1)
+      throw new HttpException(
+        'Balance changed; refresh before removing funds',
+        409,
+      );
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
   async banUser(data: BanUserDTO) {

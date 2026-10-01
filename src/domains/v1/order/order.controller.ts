@@ -66,7 +66,7 @@ export class OrderController {
         ?.split(',')[0]
         ?.split('-')[0]
         ?.toLowerCase() || 'en';
-    return this.orderService.finishOrder(finishDto, lang);
+    return this.orderService.finishOrder(finishDto, lang, request.user.id);
   }
 
   @Get('admin/general-log')

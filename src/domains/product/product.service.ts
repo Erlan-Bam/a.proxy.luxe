@@ -2,6 +2,10 @@ import { HttpException, Injectable } from '@nestjs/common';
 import axios, { Axios, AxiosResponse } from 'axios';
 import { ConfigService } from '@nestjs/config';
 import {
+  ResidentProvisioner,
+  ResidentCheckpoint,
+} from './resident-provisioner';
+import {
   ReferenceResponse,
   ReferenceSingleResponse,
 } from './dto/reference.response';
@@ -13,7 +17,7 @@ import {
 } from './rdo/response.dto';
 import { CalcRequestDTO, CalcResidentRequestDTO } from './dto/request.dto';
 import { ActiveProxy, ActiveProxyType } from './rdo/get-active-proxy.rdo';
-import { Proxy } from '@prisma/client';
+import { Proxy, Prisma } from '@prisma/client';
 import { OrderInfo } from './dto/order.dto';
 import { PrismaService } from '../v1/shared/prisma.service';
 import geoReference = require('../../data/geo.json');
@@ -157,10 +161,8 @@ export class ProductService {
     }
 
     const proxy = items.find((item: any) => {
-      const belongsToOrder =
-        String(item.order_id) === String(providerOrderId);
-      const isSelectedProxy =
-        String(item.id) === String(providerProxyId);
+      const belongsToOrder = String(item.order_id) === String(providerOrderId);
+      const isSelectedProxy = String(item.id) === String(providerProxyId);
 
       return belongsToOrder && isSelectedProxy;
     });
@@ -1097,177 +1099,22 @@ export class ProductService {
         console.log('[PRODUCT.SERVICE] Returning non-resident result:', result);
         return result;
       } else {
-        console.log('[PRODUCT.SERVICE] Processing resident order');
-        console.log('[PRODUCT.SERVICE] Tariff ID:', orderInfo.tariffId);
-        console.log('[PRODUCT.SERVICE] User ID:', orderInfo.userId);
-        console.log('[PRODUCT.SERVICE] Tariff string:', orderInfo.tariff);
-
-        const tariffResponse = await this.proxySeller.post('/order/make', {
-          tarifId: orderInfo.tariffId,
-          paymentId: 1,
-        });
-        console.log(
-          '[PRODUCT.SERVICE] Tariff response:',
-          JSON.stringify(tariffResponse.data, null, 2),
-        );
-
-        if (
-          tariffResponse.data?.status !== 'success' ||
-          !tariffResponse.data?.data?.orderId
-        ) {
-          throw new HttpException(
-            tariffResponse.data?.errors?.[0]?.message ||
-              'Failed to place a resident order',
-            400,
-          );
-        }
-
-        const orderNumber = tariffResponse.data.data.listBaseOrderNumbers?.[0];
-
-        const tariff = await this.convertToBytes(orderInfo.tariff as string);
-        console.log('[PRODUCT.SERVICE] Converted tariff to bytes:', tariff);
-
-        const proxies = await this.getActiveProxyList(
-          orderInfo.userId,
-          'resident',
-        );
-        console.log(
-          '[PRODUCT.SERVICE] getActiveProxyList returned status:',
-          proxies.status,
-        );
-        console.log('[PRODUCT.SERVICE] Proxies data exists:', !!proxies.data);
-        console.log(
-          '[PRODUCT.SERVICE] Proxies items exists:',
-          !!proxies.data?.items,
-        );
-        console.log(
-          '[PRODUCT.SERVICE] Proxies items length:',
-          proxies.data?.items?.length,
-        );
-        console.log(
-          '[PRODUCT.SERVICE] Full proxies response:',
-          JSON.stringify(proxies, null, 2),
-        );
-
-        const resident = proxies.data?.items[0];
-        console.log(
-          '[PRODUCT.SERVICE] Resident (first item):',
-          resident ? 'EXISTS' : 'NULL/UNDEFINED',
-        );
-        console.log(
-          '[PRODUCT.SERVICE] Resident value:',
-          JSON.stringify(resident, null, 2),
-        );
-        console.log(
-          '[PRODUCT.SERVICE] Resident (first item):',
-          resident ? 'EXISTS' : 'NULL/UNDEFINED',
-        );
-        console.log(
-          '[PRODUCT.SERVICE] Resident value:',
-          JSON.stringify(resident, null, 2),
-        );
-        if (resident) {
-          console.log(
-            '[PRODUCT.SERVICE] Resident found, accessing package_info',
-          );
-          console.log(
-            '[PRODUCT.SERVICE] package_info exists:',
-            !!resident.package_info,
-          );
-          console.log(
-            '[PRODUCT.SERVICE] package_info value:',
-            JSON.stringify(resident.package_info, null, 2),
-          );
-
-          if (!resident.package_info) {
-            console.error(
-              '[PRODUCT.SERVICE] ERROR: package_info is null/undefined!',
-            );
-            throw new HttpException(
-              'Package info is missing for resident proxy',
-              500,
-            );
-          }
-
-          console.log(
-            '[PRODUCT.SERVICE] package_key:',
-            resident.package_info.package_key,
-          );
-          console.log(
-            '[PRODUCT.SERVICE] traffic_limit:',
-            resident.package_info.traffic_limit,
-          );
-
-          const response = await this.proxySeller.post(
-            '/residentsubuser/update',
-            {
-              is_link_date: false,
-              traffic_limit: String(
-                Number(resident.package_info.traffic_limit) + Number(tariff),
-              ),
-              is_active: true,
-              expired_at: await this.getOneMonthLaterFormatted(),
-              package_key: resident.package_info.package_key,
-            },
-          );
-          console.log(
-            '[PRODUCT.SERVICE] Update response:',
-            JSON.stringify(response.data, null, 2),
-          );
-
-          // Check if update was successful
-          if (response.data.status !== 'success' || !response.data.data) {
-            console.error(
-              '[PRODUCT.SERVICE] ERROR: Update resident package failed:',
-              JSON.stringify(response.data.errors, null, 2),
-            );
-            throw new HttpException(
-              response.data.errors?.[0]?.message ||
-                'Failed to update resident package',
-              500,
-            );
-          }
-
-          console.log('[PRODUCT.SERVICE] Returning update result');
-          return {
-            package_key: response.data.data.package_key,
-            orderId: tariffResponse.data.data.orderId.toString(),
-            orderNumber,
-          };
-        } else {
-          console.log(
-            '[PRODUCT.SERVICE] No existing resident found, creating new one',
-          );
-          const response = await this.proxySeller.post(
-            '/residentsubuser/create',
-            {
-              is_link_date: false,
-              rotation: 1,
-              is_active: true,
-              traffic_limit: tariff.toString(),
-            },
-          );
-          console.log(
-            '[PRODUCT.SERVICE] Create response:',
-            JSON.stringify(response.data, null, 2),
-          );
-          console.log('[PRODUCT.SERVICE] Returning create result');
-          return {
-            package_key: response.data.data.package_key,
-            orderId: tariffResponse.data.data.orderId.toString(),
-            orderNumber,
-          };
-        }
+        return await new ResidentProvisioner(
+          this.prisma,
+          this.proxySeller,
+        ).provision(orderInfo);
       }
     } catch (error) {
-      console.error('[PRODUCT.SERVICE] ERROR in placeOrder:');
-      console.error('[PRODUCT.SERVICE] Error message:', error.message);
-      console.error('[PRODUCT.SERVICE] Error stack:', error.stack);
-      console.error('[PRODUCT.SERVICE] Full error:', error);
-      console.error(
-        '[PRODUCT.SERVICE] OrderInfo that caused error:',
-        JSON.stringify(orderInfo, null, 2),
-      );
+      // Axios errors include the API key in config.baseURL; log only safe fields.
+      console.error('[PRODUCT.SERVICE] Order failed', {
+        orderId: orderInfo.orderId,
+        type: orderInfo.type,
+        message:
+          error instanceof HttpException
+            ? error.message
+            : 'Provider transport or persistence failure',
+        status: error.response?.status,
+      });
       if (error instanceof HttpException) {
         throw error;
       }
@@ -1312,12 +1159,17 @@ export class ProductService {
     if (response.data.status !== 'success') {
       throw new HttpException('Invalid data', 400);
     }
-    await this.prisma.user.update({
-      where: { id: order.userId },
+    const debit = await this.prisma.user.updateMany({
+      where: { id: order.userId, balance: { gte: currentPrice } },
       data: {
         balance: { decrement: currentPrice },
       },
     });
+    if (debit.count !== 1)
+      throw new HttpException(
+        'Insufficient balance; provider renewal requires reconciliation',
+        409,
+      );
     await this.prisma.order.update({
       where: { id: data.orderId },
       data: {
@@ -1346,160 +1198,360 @@ export class ProductService {
     return { status: 'success' };
   }
 
-  async prolongResident(data: ProlongResidentDto) {
-    const order = await this.prisma.order.findFirst({
+  async withResidentLock<T>(
+    userId: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const { Client } = require('pg');
+    const client = new Client({
+      connectionString: this.configService.get<string>('DATABASE_URL'),
+      connectionTimeoutMillis: 10000,
+    });
+    // A session lock is released by PostgreSQL even if the process restarts.
+    let disconnected = false;
+    client.on('error', () => {
+      disconnected = true;
+    });
+    try {
+      await client.connect();
+      const result = await client.query(
+        'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked',
+        [`resident:${userId}`],
+      );
+      if (!result.rows[0]?.locked)
+        throw new HttpException(
+          'Resident order is already being processed',
+          409,
+        );
+      const value = await action();
+      if (disconnected)
+        throw new HttpException(
+          'Resident operation requires confirmation; retry the same order',
+          503,
+        );
+      return value;
+    } finally {
+      await client.end().catch(() => {});
+    }
+  }
+
+  async getPendingResidentOrder(userId: string, tariff?: string) {
+    const pending = await this.prisma.order.findFirst({
       where: {
-        id: data.orderId,
-        userId: data.user.id,
-        type: Proxy.resident,
-        status: 'PAID',
-        proxySellerId: data.packageKey,
+        userId,
+        type: 'resident',
+        status: { in: ['PENDING', 'PROCESSING'] },
+        OR: [
+          { residentFulfillment: { not: Prisma.DbNull } },
+          { status: 'PROCESSING' },
+          { orderId: { not: null } },
+        ],
       },
+      orderBy: { createdAt: 'asc' },
     });
+    if (pending && tariff && pending.tariff !== tariff) {
+      throw new HttpException(
+        `Complete resident order ${pending.id} before buying another tariff`,
+        409,
+      );
+    }
+    return pending;
+  }
 
-    if (!order) {
+  async finishResidentOrder(
+    orderId: string,
+    userId: string,
+    promocode?: string,
+  ) {
+    return this.withResidentLock(userId, () =>
+      this.finishResidentOrderLocked(orderId, userId, promocode),
+    );
+  }
+
+  private async finishResidentOrderLocked(
+    orderId: string,
+    userId: string,
+    promocode?: string,
+    sourceOrderId?: string,
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order || order.userId !== userId || order.type !== 'resident')
       throw new HttpException('Resident order not found', 404);
+    if (order.status === 'PAID') return this.residentCheckoutResult(order);
+    if (order.status === 'CANCELED')
+      throw new HttpException('Order canceled', 409);
+    const pending = await this.getPendingResidentOrder(userId, order.tariff!);
+    if (pending && pending.id !== order.id)
+      return this.finishResidentOrderLocked(pending.id, userId);
+    const checkpoint =
+      order.residentFulfillment as unknown as ResidentCheckpoint | null;
+    if (!checkpoint && order.createdAt) {
+      const newer = await this.prisma.order.findFirst({
+        where: {
+          userId,
+          type: 'resident',
+          status: 'PAID',
+          id: { not: order.id },
+          updatedAt: { gt: order.createdAt },
+        },
+      });
+      if (newer)
+        throw new HttpException(
+          'Resident package has changed since checkout; refresh before buying again',
+          409,
+        );
     }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: data.user.id },
-    });
-    if (!user) {
-      throw new HttpException('User not found', 404);
+    if (order.status === 'PROCESSING' && !checkpoint) {
+      throw new HttpException(
+        'Previous resident purchase requires reconciliation; no new purchase made',
+        409,
+      );
     }
-
-    const tariffName = data.tariff ?? order.tariff;
-    if (!tariffName) {
-      throw new HttpException('Invalid resident tariff', 400);
+    let price = new Decimal(checkpoint?.charge ?? order.totalPrice);
+    const discountCode = checkpoint ? checkpoint.discountCode : promocode;
+    if (!checkpoint && discountCode) {
+      const coupon = await this.prisma.coupon.findUnique({
+        where: { code: discountCode },
+      });
+      if (!coupon || coupon.limit <= 0)
+        throw new HttpException('Invalid promocode', 400);
+      price = price.mul(Decimal.sub(100, coupon.discount)).div(100);
     }
-
-    const tariffGb = Number.parseInt(tariffName, 10);
-    if (!Number.isFinite(tariffGb)) {
-      throw new HttpException('Invalid resident tariff', 400);
-    }
-
-    const currentPrice = await this.getCalcForOrder(Proxy.resident, tariffGb);
-    if (new Decimal(user.balance).lt(currentPrice)) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (
+      !user ||
+      !price.isFinite() ||
+      price.lt(0) ||
+      (!checkpoint?.fundsReserved && new Decimal(user.balance).lt(price))
+    )
       throw new HttpException('Insufficient balance', 400);
-    }
-
-    const reference = await this.getProductReferenceByType(Proxy.resident);
-    if (reference.status !== 'success') {
-      throw new HttpException(reference.message, 400);
-    }
-
+    const reference = await this.getProductReferenceByType('resident');
+    if (reference.status !== 'success')
+      throw new HttpException(
+        reference.message || 'Invalid reference data',
+        502,
+      );
     const tariff = reference.tariffs?.find(
-      (item) =>
-        item.name.toLowerCase() === tariffName.toLowerCase() && item.personal,
+      (t) => t.personal && t.name.toLowerCase() === order.tariff?.toLowerCase(),
     );
-    if (!tariff) {
-      throw new HttpException('Resident tariff not found', 400);
-    }
+    if (!tariff) throw new HttpException('Resident tariff not found', 400);
 
-    const packagesResponse = await this.proxySeller.get(
-      '/residentsubuser/packages',
-    );
-    const residentPackage = packagesResponse.data.data?.find(
-      (item) => item.package_key === data.packageKey,
-    );
-    if (!residentPackage) {
-      throw new HttpException('Resident package not found', 404);
-    }
-
-    const tariffOrderResponse = await this.proxySeller.post('/order/make', {
-      tarifId: tariff.id,
-      paymentId: 1,
+    const started = await this.prisma.order.updateMany({
+      where: { id: order.id, status: { in: ['PENDING', 'PROCESSING'] } },
+      data: { status: 'PROCESSING' },
     });
-    if (
-      tariffOrderResponse.data.status !== 'success' ||
-      !tariffOrderResponse.data.data?.orderId
-    ) {
-      throw new HttpException(
-        tariffOrderResponse.data.errors?.[0]?.message ||
-          'Failed to renew resident tariff',
-        400,
-      );
-    }
-    const renewalOrderNumber =
-      tariffOrderResponse.data.data.listBaseOrderNumbers?.[0];
-
-    const addedTraffic = await this.convertToBytes(tariffName);
-    const currentTrafficLimit = Number(residentPackage.traffic_limit);
-    if (!Number.isFinite(currentTrafficLimit)) {
-      throw new HttpException('Invalid resident traffic limit', 400);
-    }
-
-    const newEndDate = await this.getOneMonthLaterFormatted();
-    const packageResponse = await this.proxySeller.post(
-      '/residentsubuser/update',
-      {
-        is_link_date: false,
-        rotation: residentPackage.rotation ?? 1,
-        traffic_limit: String(currentTrafficLimit + addedTraffic),
-        is_active: true,
-        expired_at: newEndDate,
-        package_key: data.packageKey,
-      },
-    );
-    if (
-      packageResponse.data.status !== 'success' ||
-      !packageResponse.data.data
-    ) {
-      throw new HttpException(
-        packageResponse.data.errors?.[0]?.message ||
-          'Failed to update resident package',
-        400,
-      );
-    }
-
-    const updatedUser = await this.prisma.$transaction(async (prisma) => {
-      const balance = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          balance: { decrement: currentPrice },
-        },
-      });
-
-      await prisma.order.update({
+    if (started.count !== 1) {
+      const current = await this.prisma.order.findUnique({
         where: { id: order.id },
-        data: {
-          end_date: newEndDate,
-          tariff: tariffName,
-          totalPrice: currentPrice,
-          ...(renewalOrderNumber && { orderNumber: renewalOrderNumber }),
+      });
+      if (current?.status === 'PAID')
+        return this.residentCheckoutResult(current);
+      throw new HttpException('Resident order state changed', 409);
+    }
+    try {
+      const allocation = await this.placeOrder({
+        type: 'resident',
+        orderId: order.id,
+        userId,
+        tariff: order.tariff!,
+        tariffId: tariff.id,
+        paymentId: 1,
+        charge: price.toString(),
+        discountCode,
+        sourceOrderId,
+      });
+      if (!allocation.package_key || !('end_date' in allocation)) {
+        throw new HttpException(
+          'Incomplete resident allocation; reconciliation required',
+          502,
+        );
+      }
+      const completed = await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+          const current = await tx.order.findUnique({
+            where: { id: order.id },
+          });
+          if (current?.status === 'PAID') return current;
+          if (!current || current.status !== 'PROCESSING')
+            throw new HttpException('Resident order state changed', 409);
+          const fulfillment =
+            current.residentFulfillment as unknown as ResidentCheckpoint;
+          if (!fulfillment?.fundsReserved || !fulfillment.charge)
+            throw new HttpException(
+              'Resident funds reservation missing; reconciliation required',
+              409,
+            );
+          const settledPrice = new Decimal(fulfillment.charge);
+          await tx.order.updateMany({
+            where: {
+              userId,
+              type: 'resident',
+              proxySellerId: allocation.package_key,
+              id: { not: order.id },
+            },
+            data: { proxySellerId: null },
+          });
+          const updated = await tx.order.update({
+            where: { id: order.id },
+            data: {
+              status: 'PAID',
+              totalPrice: settledPrice,
+              promocode: fulfillment.discountCode ?? null,
+              residentFulfillment: {
+                ...fulfillment,
+                fundsReserved: false,
+                fundsCaptured: true,
+              },
+              proxySellerId: allocation.package_key,
+              orderId: allocation.orderId,
+              orderNumber: allocation.orderNumber,
+              end_date: allocation.end_date,
+            },
+          });
+          if (fulfillment.discountCode && !fulfillment.couponReserved) {
+            throw new HttpException(
+              'Resident coupon reservation missing; reconciliation required',
+              409,
+            );
+          }
+          const customer = await tx.user.findUnique({
+            where: { id: userId },
+            include: { referredBy: true },
+          });
+          if (customer?.referredBy)
+            await tx.partnerTransaction.create({
+              data: {
+                partnerId: customer.referredBy.partnerId,
+                amount: settledPrice.mul(0.15),
+              },
+            });
+          return updated;
+        },
+        { isolationLevel: 'Serializable', timeout: 20000 },
+      );
+      return this.residentCheckoutResult(completed);
+    } catch (error) {
+      const latest = await this.prisma.order.findUnique({
+        where: { id: order.id },
+      });
+      if (latest && !latest.residentFulfillment && !latest.orderId) {
+        await this.prisma.order.updateMany({
+          where: {
+            id: order.id,
+            status: 'PROCESSING',
+            orderId: null,
+            residentFulfillment: { equals: Prisma.DbNull },
+          },
+          data: { status: 'PENDING' },
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async residentCheckoutResult(order: {
+    id: string;
+    userId: string;
+    totalPrice: unknown;
+    end_date: string;
+    tariff: string | null;
+  }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: order.userId },
+      select: { balance: true },
+    });
+    return {
+      message: 'Successfully finished order',
+      status: 'success',
+      type: 'resident',
+      orderId: order.id,
+      price: Number(order.totalPrice),
+      balance: Number(user?.balance),
+      date_end: order.end_date,
+      tariff: order.tariff,
+    };
+  }
+
+  async prolongResident(data: ProlongResidentDto) {
+    return this.withResidentLock(data.user.id, async () => {
+      const order = await this.prisma.order.findFirst({
+        where: {
+          id: data.orderId,
+          userId: data.user.id,
+          type: 'resident',
+          status: 'PAID',
         },
       });
-
-      await prisma.order.create({
+      if (!order) throw new HttpException('Resident order not found', 404);
+      const tariff = data.tariff ?? order.tariff;
+      if (!tariff) throw new HttpException('Invalid resident tariff', 400);
+      const completed = await this.prisma.order.findFirst({
+        where: {
+          userId: data.user.id,
+          type: 'resident',
+          status: 'PAID',
+          residentFulfillment: { path: ['sourceOrderId'], equals: order.id },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (completed) {
+        if (completed.tariff !== tariff)
+          throw new HttpException(
+            'This renewal already completed with a different tariff; refresh before buying again',
+            409,
+          );
+        return this.residentCheckoutResult(completed);
+      }
+      const pending = await this.getPendingResidentOrder(data.user.id, tariff);
+      if (pending)
+        return this.finishResidentOrderLocked(pending.id, data.user.id);
+      if (order.proxySellerId !== data.packageKey) {
+        throw new HttpException('Resident package ownership changed', 409);
+      }
+      const reference = await this.getProductReferenceByType('resident');
+      if (
+        reference.status !== 'success' ||
+        !reference.tariffs?.some(
+          (t) => t.personal && t.name.toLowerCase() === tariff.toLowerCase(),
+        )
+      ) {
+        throw new HttpException('Resident tariff not found', 400);
+      }
+      const price = await this.getCalcForOrder(
+        Proxy.resident,
+        Number.parseInt(tariff, 10),
+      );
+      const user = await this.prisma.user.findUnique({
+        where: { id: data.user.id },
+      });
+      if (!user || new Decimal(user.balance).lt(price))
+        throw new HttpException('Insufficient balance', 400);
+      const renewal = await this.prisma.order.create({
         data: {
-          type: order.type,
-          userId: order.userId,
+          userId: data.user.id,
+          type: 'resident',
+          status: 'PENDING',
           country: order.country,
           quantity: order.quantity,
           periodDays: '1m',
           proxyType: order.proxyType,
-          status: 'PAID',
           goal: order.goal,
-          tariff: tariffName,
-          totalPrice: currentPrice,
-          orderId: String(tariffOrderResponse.data.data.orderId),
-          orderNumber: renewalOrderNumber,
-          end_date: newEndDate,
+          tariff,
+          totalPrice: price,
+          end_date: order.end_date,
         },
       });
-
-      return balance;
+      return this.finishResidentOrderLocked(
+        renewal.id,
+        data.user.id,
+        undefined,
+        order.id,
+      );
     });
-
-    return {
-      status: 'success',
-      price: currentPrice,
-      balance: Number(updatedUser.balance),
-      date_end: newEndDate,
-      tariff: tariffName,
-    };
   }
-
   async modifyProxyResident(data: ModifyProxyResidentDto) {
     console.log('[modifyProxyResident] Called with:', JSON.stringify(data));
 

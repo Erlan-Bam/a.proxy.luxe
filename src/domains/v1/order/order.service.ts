@@ -34,6 +34,42 @@ export class OrderService {
     private userService: UserService,
   ) {}
   async create(createOrderDto: CreateOrderDto) {
+    if (createOrderDto.type === 'resident') {
+      return this.productService.withResidentLock(
+        createOrderDto.userId,
+        async () => {
+          const pending = await this.productService.getPendingResidentOrder(
+            createOrderDto.userId,
+            createOrderDto.tariff,
+          );
+          if (pending) return pending;
+          const latest = await this.prisma.order.findFirst({
+            where: {
+              userId: createOrderDto.userId,
+              type: 'resident',
+              status: 'PAID',
+            },
+            orderBy: { updatedAt: 'desc' },
+          });
+          const draft = await this.prisma.order.findFirst({
+            where: {
+              userId: createOrderDto.userId,
+              type: 'resident',
+              status: 'PENDING',
+              tariff: createOrderDto.tariff,
+              residentFulfillment: { equals: Prisma.DbNull },
+              ...(latest && { createdAt: { gt: latest.updatedAt } }),
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+          return draft ?? this.createValidatedOrder(createOrderDto);
+        },
+      );
+    }
+    return this.createValidatedOrder(createOrderDto);
+  }
+
+  private async createValidatedOrder(createOrderDto: CreateOrderDto) {
     if (
       createOrderDto.type !== 'resident' &&
       createOrderDto.quantity === undefined
@@ -342,7 +378,38 @@ export class OrderService {
     throw new Error('Max retries exceeded');
   }
 
-  async finishOrder(paymentDto: FinishOrderDto, lang: string = 'en') {
+  async finishOrder(
+    paymentDto: FinishOrderDto,
+    lang: string = 'en',
+    authenticatedUserId?: string,
+  ) {
+    const requested = await this.prisma.order.findUnique({
+      where: { id: paymentDto.orderId },
+    });
+    if (
+      requested &&
+      authenticatedUserId &&
+      requested.userId !== authenticatedUserId
+    ) {
+      throw new NotFoundException('Order not found');
+    }
+    if (requested?.type === 'resident') {
+      const result = await this.productService.finishResidentOrder(
+        requested.id,
+        requested.userId,
+        paymentDto.promocode,
+      );
+      if (requested.status !== 'PAID') {
+        const user = await this.prisma.user.findUnique({
+          where: { id: requested.userId },
+        });
+        if (user)
+          await this.userService
+            .sendProxyEmail(user.email, lang)
+            .catch(() => {});
+      }
+      return result;
+    }
     const lockKey = paymentDto.orderId;
 
     if (this.processingOrders.has(lockKey)) {
@@ -454,12 +521,17 @@ export class OrderService {
         this.prisma.$transaction(
           async (prisma) => {
             // Update user balance
-            await prisma.user.update({
-              where: { id: order.userId },
+            const debit = await prisma.user.updateMany({
+              where: { id: order.userId, balance: { gte: totalPrice } },
               data: {
                 balance: { decrement: totalPrice },
               },
             });
+            if (debit.count !== 1)
+              throw new HttpException(
+                'Insufficient balance; provider purchase requires reconciliation',
+                409,
+              );
 
             if (order.type === 'resident') {
               const existingPK = package_key
@@ -557,6 +629,28 @@ export class OrderService {
   }
 
   async deleteById(userId: string, orderId: string) {
+    const existing = await this.prisma.order.findFirst({
+      where: { id: orderId, userId },
+    });
+    if (existing?.type === 'resident') {
+      return this.productService.withResidentLock(userId, async () => {
+        const deleted = await this.prisma.order.deleteMany({
+          where: {
+            id: orderId,
+            userId,
+            status: 'PENDING',
+            orderId: null,
+            orderNumber: null,
+            residentFulfillment: { equals: Prisma.DbNull },
+          },
+        });
+        if (deleted.count !== 1)
+          throw new BadRequestException(
+            'Cannot delete a resident order after processing has started',
+          );
+        return existing;
+      });
+    }
     const order = await this.prisma.order.delete({
       where: { userId: userId, id: orderId },
     });

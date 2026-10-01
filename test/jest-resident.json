@@ -1,0 +1,8 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testEnvironment": "node",
+  "testRegex": "test/resident-concurrency.spec.ts$",
+  "testTimeout": 20000,
+  "transform": { "^.+\\.(t|j)s$": "ts-jest" }
+}

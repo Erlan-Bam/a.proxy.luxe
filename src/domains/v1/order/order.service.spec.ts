@@ -32,6 +32,7 @@ describe('OrderService', () => {
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     coupon: {
       update: jest.fn(),
@@ -60,6 +61,7 @@ describe('OrderService', () => {
     prisma.order.update.mockResolvedValue(order);
     prisma.user.findUnique.mockResolvedValue(user);
     prisma.user.update.mockResolvedValue(user);
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
     prisma.$transaction.mockImplementation(async (callback) =>
       callback(prisma),
     );
@@ -100,6 +102,19 @@ describe('OrderService', () => {
         protocol: ProxyType.SOCKS5,
       }),
     );
+  });
+
+  it('does not overdraft funds reserved by a concurrent resident checkout', async () => {
+    prisma.user.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.finishOrder({ orderId: order.id })).rejects.toThrow(
+      'Insufficient balance',
+    );
+    expect(prisma.user.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: order.userId, balance: { gte: order.totalPrice } },
+      }),
+    );
+    expect(prisma.order.update).not.toHaveBeenCalled();
   });
 });
 

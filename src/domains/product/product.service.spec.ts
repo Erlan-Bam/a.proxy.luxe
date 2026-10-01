@@ -1,5 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
 import { ProductService } from './product.service';
 
 describe('ProductService.prolongResident', () => {
@@ -14,18 +16,80 @@ describe('ProductService.prolongResident', () => {
     quantity: 1,
     proxyType: 'HTTPS',
     goal: 'surfing',
+    totalPrice: 2.4,
+    orderId: 'original-provider-order',
+    orderNumber: 'original-order-number',
+    end_date: '22.07.2026',
+    residentFulfillment: null,
+    createdAt: new Date('2026-06-23T12:00:00Z'),
+    updatedAt: new Date('2026-06-23T12:00:00Z'),
   };
+  let orders: Record<string, any>[];
+  let balance: number;
+  let residentPackage: {
+    package_key: string;
+    traffic_limit: string;
+    is_active: boolean;
+    expired_at: string | { date: string };
+  };
+
+  function matchesOrder(
+    candidate: Record<string, any>,
+    where: Record<string, any>,
+  ) {
+    return Object.entries(where).every(([field, condition]) => {
+      if (field === 'OR') {
+        return condition.some((branch) => matchesOrder(candidate, branch));
+      }
+      const value = candidate[field];
+      if (condition !== null && typeof condition === 'object') {
+        if ('in' in condition) return condition.in.includes(value);
+        if ('path' in condition) {
+          return (
+            condition.path.reduce((current, key) => current?.[key], value) ===
+            condition.equals
+          );
+        }
+        if ('not' in condition) {
+          return !isDeepStrictEqual(value, condition.not === Prisma.DbNull ? null : condition.not);
+        }
+        if ('equals' in condition) {
+          return isDeepStrictEqual(value, condition.equals === Prisma.DbNull ? null : condition.equals);
+        }
+        if ('gt' in condition) return value > condition.gt;
+        throw new Error(`Unsupported order filter: ${field}`);
+      }
+      return value === condition;
+    });
+  }
+
+  function updateOrder(
+    candidate: Record<string, any>,
+    data: Record<string, any>,
+  ) {
+    Object.assign(
+      candidate,
+      structuredClone({
+        ...data,
+        ...('totalPrice' in data && { totalPrice: Number(data.totalPrice) }),
+      }),
+    );
+    return structuredClone(candidate);
+  }
 
   const prisma = {
     order: {
+      findUnique: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       create: jest.fn(),
     },
     user: {
       findUnique: jest.fn(),
-      update: jest.fn(),
+      updateMany: jest.fn(),
     },
+    $queryRaw: jest.fn(async () => []),
     $transaction: jest.fn(),
   };
 
@@ -37,28 +101,89 @@ describe('ProductService.prolongResident', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers({ now: new Date('2026-07-23T23:30:00Z') });
+    orders = [structuredClone(order)];
+    balance = 10;
+    residentPackage = {
+      package_key: 'resident-package',
+      traffic_limit: String(1024 ** 3),
+      is_active: true,
+      expired_at: { date: '2026-07-22 23:59:59.000000' },
+    };
 
     service = new ProductService(
-      { get: jest.fn().mockReturnValue('test-key') } as unknown as ConfigService,
+      {
+        get: jest.fn().mockReturnValue('test-key'),
+      } as unknown as ConfigService,
       prisma as any,
     );
+    jest
+      .spyOn(service, 'withResidentLock')
+      .mockImplementation(async (_userId, action) => action());
     proxySeller = {
       get: jest.fn(),
       post: jest.fn(),
     };
     (service as any).proxySeller = proxySeller;
 
-    prisma.order.findFirst.mockResolvedValue(order);
-    prisma.user.findUnique.mockResolvedValue({
-      id: order.userId,
-      balance: 10,
+    prisma.order.findUnique.mockImplementation(async ({ where }) => {
+      return structuredClone(
+        orders.find((candidate) => matchesOrder(candidate, where)) ?? null,
+      );
     });
-    prisma.user.update.mockResolvedValue({
-      id: order.userId,
-      balance: 7.6,
+    prisma.order.findFirst.mockImplementation(async ({ where, orderBy }) => {
+      const candidates = orders.filter((candidate) =>
+        matchesOrder(candidate, where),
+      );
+      if (orderBy?.createdAt) {
+        candidates.sort(
+          (a, b) =>
+            (a.createdAt.getTime() - b.createdAt.getTime()) *
+            (orderBy.createdAt === 'asc' ? 1 : -1),
+        );
+      }
+      return structuredClone(candidates[0] ?? null);
     });
-    prisma.order.update.mockResolvedValue(order);
-    prisma.order.create.mockResolvedValue({ id: 'renewal-order' });
+    prisma.order.update.mockImplementation(async ({ where, data }) => {
+      const candidate = orders.find((candidate) =>
+        matchesOrder(candidate, where),
+      );
+      if (!candidate) throw new Error(`Order not found: ${where.id}`);
+      return updateOrder(candidate, data);
+    });
+    prisma.order.updateMany.mockImplementation(async ({ where, data }) => {
+      const candidates = orders.filter((candidate) =>
+        matchesOrder(candidate, where),
+      );
+      candidates.forEach((candidate) => updateOrder(candidate, data));
+      return { count: candidates.length };
+    });
+    prisma.order.create.mockImplementation(async ({ data }) => {
+      const created = {
+        id: `renewal-order-${orders.length}`,
+        orderId: null,
+        orderNumber: null,
+        proxySellerId: null,
+        residentFulfillment: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...structuredClone(data),
+      };
+      orders.push(created);
+      return structuredClone(created);
+    });
+    prisma.user.findUnique.mockImplementation(async ({ where }) => {
+      return where.id === order.userId
+        ? { id: order.userId, balance, referredBy: null }
+        : null;
+    });
+    prisma.user.updateMany.mockImplementation(async ({ where, data }) => {
+      if (where.id !== order.userId || balance < Number(where.balance.gte)) {
+        return { count: 0 };
+      }
+      balance -= Number(data.balance.decrement);
+      return { count: 1 };
+    });
     prisma.$transaction.mockImplementation((callback) => callback(prisma));
 
     jest.spyOn(service, 'getProductReferenceByType').mockResolvedValue({
@@ -68,25 +193,29 @@ describe('ProductService.prolongResident', () => {
         { id: 103, name: '3 Gb', personal: true },
       ],
     } as any);
-    jest
-      .spyOn(service, 'getOneMonthLaterFormatted')
-      .mockResolvedValue('22.08.2026');
-
-    proxySeller.get.mockResolvedValue({
-      data: {
-        status: 'success',
-        data: [
-          {
-            package_key: 'resident-package',
-            traffic_limit: String(1024 ** 3),
-            rotation: 60,
+    proxySeller.get.mockImplementation(async (path: string) => {
+      if (path === '/resident/package') {
+        return {
+          data: {
+            status: 'success',
+            data: {
+              package_key: 'main-package',
+              is_active: true,
+              expired_at: { date: '2026-08-23 23:59:59.000000' },
+            },
           },
-        ],
-      },
+        };
+      }
+      if (path === '/residentsubuser/packages') {
+        return {
+          data: { status: 'success', data: [structuredClone(residentPackage)] },
+        };
+      }
+      throw new Error(`Unexpected provider GET: ${path}`);
     });
-    proxySeller.post.mockImplementation((path: string) => {
+    proxySeller.post.mockImplementation(async (path: string, data: any) => {
       if (path === '/order/make') {
-        return Promise.resolve({
+        return {
           data: {
             status: 'success',
             data: {
@@ -94,59 +223,116 @@ describe('ProductService.prolongResident', () => {
               listBaseOrderNumbers: ['resident-renewal-12345'],
             },
           },
-        });
+        };
       }
-
-      return Promise.resolve({
-        data: {
-          status: 'success',
-          data: { package_key: 'resident-package' },
-        },
-      });
+      if (path === '/residentsubuser/update') {
+        Object.assign(residentPackage, data);
+        return {
+          data: { status: 'success', data: structuredClone(residentPackage) },
+        };
+      }
+      throw new Error(`Unexpected provider POST: ${path}`);
     });
   });
 
-  it('renews the package with the original tariff and debits its price', async () => {
-    const result = await service.prolongResident({
-      orderId: order.id,
-      packageKey: 'resident-package',
-      user: { id: order.userId } as any,
-    });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
 
-    expect(proxySeller.post).toHaveBeenNthCalledWith(1, '/order/make', {
-      tarifId: 101,
-      paymentId: 1,
-    });
+  function expectRenewal(
+    tariff: string,
+    tariffId: number,
+    price: number,
+    trafficLimit: string,
+  ) {
+    expect(proxySeller.post).toHaveBeenCalledTimes(2);
+    expect(proxySeller.post).toHaveBeenNthCalledWith(
+      1,
+      '/order/make',
+      { tarifId: tariffId, paymentId: 1 },
+      { timeout: 30000 },
+    );
     expect(proxySeller.post).toHaveBeenNthCalledWith(
       2,
       '/residentsubuser/update',
       expect.objectContaining({
         package_key: 'resident-package',
-        traffic_limit: String(2 * 1024 ** 3),
+        traffic_limit: trafficLimit,
+        expired_at: '22.08.2026',
+      }),
+      { timeout: 30000 },
+    );
+    expect(residentPackage).toEqual(
+      expect.objectContaining({
+        package_key: 'resident-package',
+        traffic_limit: trafficLimit,
+        is_active: true,
         expired_at: '22.08.2026',
       }),
     );
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: order.userId },
-      data: { balance: { decrement: 2.4 } },
-    });
-    expect(prisma.order.update).toHaveBeenCalledWith({
-      where: { id: order.id },
-      data: {
-        end_date: '22.08.2026',
-        tariff: '1 Gb',
-        totalPrice: 2.4,
-        orderNumber: 'resident-renewal-12345',
-      },
-    });
+    expect(prisma.user.updateMany).toHaveBeenCalledTimes(1);
+    const debit = prisma.user.updateMany.mock.calls[0][0];
+    expect(debit.where.id).toBe(order.userId);
+    expect(Number(debit.where.balance.gte)).toBe(price);
+    expect(Number(debit.data.balance.decrement)).toBe(price);
+    expect(balance).toBeCloseTo(10 - price);
+    expect(prisma.order.create).toHaveBeenCalledTimes(1);
     expect(prisma.order.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        orderId: '12345',
-        orderNumber: 'resident-renewal-12345',
+        userId: order.userId,
+        type: 'resident',
+        status: 'PENDING',
+        tariff,
+        totalPrice: price,
       }),
     });
+    expect(orders).toHaveLength(2);
+    expect(orders.find((candidate) => candidate.id === order.id)).toEqual({
+      ...order,
+      proxySellerId: null,
+    });
+    expect(
+      orders.find((candidate) => candidate.id === 'renewal-order-1'),
+    ).toEqual(
+      expect.objectContaining({
+        userId: order.userId,
+        type: 'resident',
+        status: 'PAID',
+        tariff,
+        totalPrice: price,
+        proxySellerId: 'resident-package',
+        orderId: '12345',
+        orderNumber: 'resident-renewal-12345',
+        end_date: '22.08.2026',
+        residentFulfillment: expect.objectContaining({
+          stage: 'applied',
+          sourceOrderId: order.id,
+          packageKey: 'resident-package',
+          baseline: String(1024 ** 3),
+          target: trafficLimit,
+          charge: String(price),
+          expiry: '22.08.2026',
+        }),
+      }),
+    );
+  }
+
+  it('renews the package with the original tariff and debits its price', async () => {
+    const request = {
+      orderId: order.id,
+      packageKey: 'resident-package',
+      user: { id: order.userId } as any,
+    };
+    const result = await service.prolongResident(request);
+
+    expect(await service.prolongResident(request)).toEqual(result);
+    expectRenewal('1 Gb', 101, 2.4, String(2 * 1024 ** 3));
     expect(result).toEqual({
+      message: 'Successfully finished order',
       status: 'success',
+      type: 'resident',
+      orderId: 'renewal-order-1',
       price: 2.4,
       balance: 7.6,
       date_end: '22.08.2026',
@@ -155,45 +341,21 @@ describe('ProductService.prolongResident', () => {
   });
 
   it('renews the package with the tariff selected by the user', async () => {
-    prisma.user.update.mockResolvedValue({
-      id: order.userId,
-      balance: 3,
-    });
-
-    const result = await service.prolongResident({
+    const request = {
       orderId: order.id,
       packageKey: 'resident-package',
       tariff: '3 Gb',
       user: { id: order.userId } as any,
-    });
+    };
+    const result = await service.prolongResident(request);
 
-    expect(proxySeller.post).toHaveBeenNthCalledWith(1, '/order/make', {
-      tarifId: 103,
-      paymentId: 1,
-    });
-    expect(proxySeller.post).toHaveBeenNthCalledWith(
-      2,
-      '/residentsubuser/update',
-      expect.objectContaining({
-        package_key: 'resident-package',
-        traffic_limit: String(4 * 1024 ** 3),
-      }),
-    );
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: order.userId },
-      data: { balance: { decrement: 7 } },
-    });
-    expect(prisma.order.update).toHaveBeenCalledWith({
-      where: { id: order.id },
-      data: {
-        end_date: '22.08.2026',
-        tariff: '3 Gb',
-        totalPrice: 7,
-        orderNumber: 'resident-renewal-12345',
-      },
-    });
+    expect(await service.prolongResident(request)).toEqual(result);
+    expectRenewal('3 Gb', 103, 7, String(4 * 1024 ** 3));
     expect(result).toEqual({
+      message: 'Successfully finished order',
       status: 'success',
+      type: 'resident',
+      orderId: 'renewal-order-1',
       price: 7,
       balance: 3,
       date_end: '22.08.2026',
@@ -202,8 +364,6 @@ describe('ProductService.prolongResident', () => {
   });
 
   it('rejects an order that does not belong to the user', async () => {
-    prisma.order.findFirst.mockResolvedValue(null);
-
     await expect(
       service.prolongResident({
         orderId: order.id,
@@ -214,6 +374,11 @@ describe('ProductService.prolongResident', () => {
 
     expect(proxySeller.get).not.toHaveBeenCalled();
     expect(proxySeller.post).not.toHaveBeenCalled();
+    expect(service.getProductReferenceByType).not.toHaveBeenCalled();
+    expect(prisma.order.create).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(orders).toEqual([order]);
+    expect(balance).toBe(10);
   });
 });
 

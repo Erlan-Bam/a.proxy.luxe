@@ -16,6 +16,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { FinishOrderDto } from './dto/payment-order.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { PaymentStatus, UserType } from '@prisma/client';
+import { parseAdminLogQuery } from './admin-log-query';
 
 const ADMIN_LOG_LIMIT_OPTIONS = [100, 200, 300] as const;
 
@@ -81,6 +82,7 @@ export class OrderController {
     @Query('all') all = 'false',
     @Query('search') search = '',
     @Query('status') status = 'ALL',
+    @Query() columnQuery: Record<string, unknown> = {},
   ) {
     if (request.user.type !== UserType.ADMIN) {
       throw new ForbiddenException('Access denied: Admins only');
@@ -88,7 +90,7 @@ export class OrderController {
 
     const fallbackPage = parsePositiveInt(legacyPage, 1);
     const fallbackLimit = parseAdminLogLimit(legacyLimit, 100);
-    const showAll = all.toLowerCase() === 'true';
+    const showAll = typeof all === 'string' && all.toLowerCase() === 'true';
     if (
       typeof search !== 'string' ||
       (status !== 'ALL' &&
@@ -98,6 +100,7 @@ export class OrderController {
     }
 
     return this.orderService.generalLog({
+      ...parseAdminLogQuery(columnQuery),
       ordersPage: parsePositiveInt(ordersPage, fallbackPage),
       ordersLimit: showAll
         ? null

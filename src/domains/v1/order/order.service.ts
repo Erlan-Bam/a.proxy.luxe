@@ -14,8 +14,9 @@ import { ProductService } from '../../product/product.service';
 import { OrderInfo } from '../../product/dto/order.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { UserService } from '../user/user.service';
+import { AdminLogQuery, buildAdminLogQueries } from './admin-log-query';
 
-type AdminLogParams = {
+type AdminLogParams = AdminLogQuery & {
   ordersPage: number;
   ordersLimit: number | null;
   paymentsPage: number;
@@ -180,43 +181,16 @@ export class OrderService {
     const ordersPage = params.ordersLimit === null ? 1 : params.ordersPage;
     const paymentsPage =
       params.paymentsLimit === null ? 1 : params.paymentsPage;
-    // Prisma contains uses SQL LIKE: treat characters in order numbers literally.
-    const search = params.search?.trim().replace(/[\\%_]/g, '\\$&');
-    const contains = { contains: search, mode: 'insensitive' as const };
-    const orderWhere: Prisma.OrderWhereInput = {
-      ...(params.status ? { status: params.status } : {}),
-      ...(search
-        ? {
-            OR: [
-              { id: contains },
-              { orderId: contains },
-              { orderNumber: contains },
-              { userId: contains },
-              { user: { email: contains } },
-            ],
-          }
-        : {}),
-    };
-    const paymentWhere: Prisma.PaymentWhereInput = search
-      ? {
-          OR: [
-            { id: contains },
-            { userId: contains },
-            { method: contains },
-            { user: { email: contains } },
-          ],
-        }
-      : {};
+    const { orderWhere, paymentWhere, orderBy, paymentOrderBy } =
+      buildAdminLogQueries(params);
     const orderQuery = {
       where: orderWhere,
-      include: {
-        user: {
-          select: {
-            email: true,
-          },
-        },
-      },
-      orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
+      select: {
+        id: true, orderId: true, orderNumber: true, type: true, goal: true,
+        status: true, totalPrice: true, createdAt: true, updatedAt: true,
+        user: { select: { email: true } },
+      } satisfies Prisma.OrderSelect,
+      orderBy,
     };
     const ordersQuery =
       params.ordersLimit === null
@@ -228,14 +202,11 @@ export class OrderService {
           });
     const paymentQuery = {
       where: paymentWhere,
-      orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
-      include: {
-        user: {
-          select: {
-            email: true,
-          },
-        },
-      },
+      orderBy: paymentOrderBy,
+      select: {
+        id: true, method: true, price: true, createdAt: true, updatedAt: true,
+        user: { select: { email: true } },
+      } satisfies Prisma.PaymentSelect,
     };
     const paymentsQuery =
       params.paymentsLimit === null
@@ -517,6 +488,8 @@ export class OrderService {
         orderNumber = placedOrder.orderNumber;
 
       // Phase 3: Retryable DB transaction (balance + order status + partner)
+      const partnerId = user.referredBy?.partnerId ?? null;
+      const partnerCommission = partnerId ? new Decimal(totalPrice).mul(0.15).toNumber() : 0;
       const response = await this.executeWithRetry(() =>
         this.prisma.$transaction(
           async (prisma) => {
@@ -555,6 +528,10 @@ export class OrderService {
                   status: 'PAID',
                   orderId: externalOrderId,
                   orderNumber,
+                  totalPrice,
+                  partnerId,
+                  partnerCommission,
+                  partnerCommissionRecordedAt: new Date(),
                 },
               });
             } else {
@@ -565,6 +542,10 @@ export class OrderService {
                   status: 'PAID',
                   orderId: externalOrderId,
                   orderNumber,
+                  totalPrice,
+                  partnerId,
+                  partnerCommission,
+                  partnerCommissionRecordedAt: new Date(),
                 },
               });
             }
@@ -576,12 +557,11 @@ export class OrderService {
               });
             }
 
-            if (user.referredBy) {
-              const partnerId = user.referredBy.partnerId;
+            if (partnerId) {
               await prisma.partnerTransaction.create({
                 data: {
                   partnerId,
-                  amount: new Decimal(totalPrice).mul(0.15).toNumber(),
+                  amount: partnerCommission,
                 },
               });
             }

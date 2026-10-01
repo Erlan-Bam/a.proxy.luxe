@@ -1394,12 +1394,21 @@ export class ProductService {
             },
             data: { proxySellerId: null },
           });
+          const customer = await tx.user.findUnique({
+            where: { id: userId },
+            include: { referredBy: true },
+          });
+          const partnerId = customer?.referredBy?.partnerId ?? null;
+          const partnerCommission = partnerId ? settledPrice.mul(0.15) : new Decimal(0);
           const updated = await tx.order.update({
             where: { id: order.id },
             data: {
               status: 'PAID',
               totalPrice: settledPrice,
               promocode: fulfillment.discountCode ?? null,
+              partnerId,
+              partnerCommission,
+              partnerCommissionRecordedAt: new Date(),
               residentFulfillment: {
                 ...fulfillment,
                 fundsReserved: false,
@@ -1417,15 +1426,11 @@ export class ProductService {
               409,
             );
           }
-          const customer = await tx.user.findUnique({
-            where: { id: userId },
-            include: { referredBy: true },
-          });
-          if (customer?.referredBy)
+          if (partnerId)
             await tx.partnerTransaction.create({
               data: {
-                partnerId: customer.referredBy.partnerId,
-                amount: settledPrice.mul(0.15),
+                partnerId,
+                amount: partnerCommission,
               },
             });
           return updated;

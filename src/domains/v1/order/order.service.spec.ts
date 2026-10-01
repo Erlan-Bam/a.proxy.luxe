@@ -116,6 +116,26 @@ describe('OrderService', () => {
     );
     expect(prisma.order.update).not.toHaveBeenCalled();
   });
+
+  it('records nonresident commission attribution on the paid order exactly once', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      ...user, referredBy: { partnerId: 'partner' },
+    });
+
+    await service.finishOrder({ orderId: order.id });
+
+    expect(prisma.order.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: order.id },
+      data: expect.objectContaining({
+        status: 'PAID', partnerId: 'partner', partnerCommission: 0.12,
+        partnerCommissionRecordedAt: expect.any(Date),
+      }),
+    }));
+    expect(prisma.partnerTransaction.create).toHaveBeenCalledTimes(1);
+    expect(prisma.partnerTransaction.create).toHaveBeenCalledWith({
+      data: { partnerId: 'partner', amount: 0.12 },
+    });
+  });
 });
 
 describe('OrderService admin log pagination', () => {
@@ -140,17 +160,85 @@ describe('OrderService admin log pagination', () => {
     prisma.payment.count.mockResolvedValue(0);
   });
 
-  it('includes unpaid orders and sorts by the latest update with a stable tie-breaker', async () => {
+  it('includes unpaid orders and sorts by creation with a stable tie-breaker', async () => {
     await service.generalLog(2, 100);
     expect(prisma.order.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {},
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: 100,
         take: 100,
       }),
     );
     expect(prisma.order.count).toHaveBeenCalledWith({ where: {} });
+    expect(prisma.payment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    );
+  });
+
+  it('combines column filters with search and status before pagination and counts', async () => {
+    const params = {
+      ordersPage: 2, ordersLimit: 100, paymentsPage: 3, paymentsLimit: 100,
+      search: 'user', status: 'PAID' as const,
+      ordersEmail: ' user_50%@example.com ', ordersId: 'local\\id',
+      ordersProviderOrder: 'NS_123', ordersGoal: 'work%', ordersType: 'resident' as const,
+      ordersCreatedFrom: '2026-09-01', ordersCreatedTo: '2026-09-30',
+      ordersAmountMin: '0', ordersAmountMax: '10.50',
+      paymentsEmail: 'billing@example.com', paymentsId: 'pay_', paymentsMethod: 'Crypto%',
+      paymentsUpdatedFrom: '2026-09-02', paymentsAmountMin: '2.50',
+      ordersSortBy: 'amount' as const, ordersSortDirection: 'asc' as const,
+      paymentsSortBy: 'updatedAt' as const, paymentsSortDirection: 'desc' as const,
+    };
+    await service.generalLog(params);
+    const orderQuery = prisma.order.findMany.mock.calls[0][0];
+    const paymentQuery = prisma.payment.findMany.mock.calls[0][0];
+    expect(orderQuery).toMatchObject({
+      skip: 100, take: 100,
+      orderBy: [{ totalPrice: 'asc' }, { id: 'asc' }],
+      where: {
+        status: 'PAID', type: 'resident',
+        id: { contains: 'local\\\\id', mode: 'insensitive' },
+        user: { email: { contains: 'user\\_50\\%@example.com', mode: 'insensitive' } },
+        goal: { contains: 'work\\%', mode: 'insensitive' },
+        createdAt: { gte: new Date('2026-09-01T00:00:00.000Z'), lte: new Date('2026-09-30T23:59:59.999Z') },
+        totalPrice: { gte: '0', lte: '10.50' },
+        OR: expect.arrayContaining([{ user: { email: { contains: 'user', mode: 'insensitive' } } }]),
+        AND: [{ OR: [
+          { orderId: { contains: 'NS\\_123', mode: 'insensitive' } },
+          { orderNumber: { contains: 'NS\\_123', mode: 'insensitive' } },
+        ] }],
+      },
+    });
+    expect(paymentQuery).toMatchObject({
+      skip: 200, take: 100,
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      where: {
+        id: { contains: 'pay\\_', mode: 'insensitive' },
+        user: { email: { contains: 'billing@example.com', mode: 'insensitive' } },
+        method: { contains: 'Crypto\\%', mode: 'insensitive' },
+        updatedAt: { gte: new Date('2026-09-02T00:00:00.000Z') },
+        price: { gte: '2.50' },
+      },
+    });
+    expect(prisma.order.count).toHaveBeenCalledWith({ where: orderQuery.where });
+    expect(prisma.payment.count).toHaveBeenCalledWith({ where: paymentQuery.where });
+  });
+
+  it('selects only log fields and email, never credentials or fulfillment payloads', async () => {
+    await service.generalLog(1, 100);
+    const orderQuery = prisma.order.findMany.mock.calls[0][0];
+    const paymentQuery = prisma.payment.findMany.mock.calls[0][0];
+    expect(orderQuery.select).toEqual({
+      id: true, orderId: true, orderNumber: true, type: true, goal: true,
+      status: true, totalPrice: true, createdAt: true, updatedAt: true,
+      user: { select: { email: true } },
+    });
+    expect(paymentQuery.select).toEqual({
+      id: true, method: true, price: true, createdAt: true, updatedAt: true,
+      user: { select: { email: true } },
+    });
+    expect(orderQuery.include).toBeUndefined();
+    expect(paymentQuery.include).toBeUndefined();
   });
 
   it('searches provider numbers, both IDs, user ID and email before pagination', async () => {

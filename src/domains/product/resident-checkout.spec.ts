@@ -35,6 +35,7 @@ describe('resident checkout billing and retry routing', () => {
     Object.assign(order, structuredClone({
       ...data,
       ...('totalPrice' in data && { totalPrice: Number(data.totalPrice) }),
+      ...('partnerCommission' in data && { partnerCommission: String(data.partnerCommission) }),
     }));
     return structuredClone(order);
   }
@@ -92,6 +93,18 @@ describe('resident checkout billing and retry routing', () => {
     await expect((service as any).finishResidentOrder('checkout', 'customer')).rejects.toThrow('allocation failed');
     expect(balance).toBe(10);
     expect(order.status).not.toBe('PAID');
+  });
+
+  it('persists commission attribution with settlement and never duplicates it on replay', async () => {
+    prisma.user.findUnique.mockImplementation(async () => ({ id: 'customer', balance, referredBy: { partnerId: 'partner' } }));
+    prisma.partnerTransaction = { create: jest.fn().mockResolvedValue({}) };
+    await service.finishResidentOrder('checkout', 'customer');
+    await service.finishResidentOrder('checkout', 'customer');
+    expect(order).toMatchObject({ partnerId: 'partner', partnerCommission: '0.36' });
+    expect(Number.isFinite(new Date(order.partnerCommissionRecordedAt).getTime())).toBe(true);
+    expect(prisma.partnerTransaction.create).toHaveBeenCalledTimes(1);
+    expect(String(prisma.partnerTransaction.create.mock.calls[0][0].data.amount)).toBe('0.36');
+    expect(balance).toBe(7.6);
   });
 
   it('routes a new checkout to an unfinished paid provider operation instead of buying again', async () => {

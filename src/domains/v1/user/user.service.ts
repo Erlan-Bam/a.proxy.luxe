@@ -429,17 +429,36 @@ export class UserService {
       1,
     );
 
-    const [referrals, allTransactions, payout, user] =
+    const [referrals, allTransactions, payouts, user] =
       await this.prisma.$transaction([
-        this.prisma.referral.findMany({ where: { partnerId: userId } }),
+        this.prisma.referral.findMany({
+          where: { partnerId: userId },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          include: {
+            user: {
+              select: {
+                orders: {
+                  where: { status: 'PAID' },
+                  orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                  select: {
+                    id: true, createdAt: true, totalPrice: true,
+                    orderId: true, orderNumber: true, partnerId: true,
+                    partnerCommission: true, partnerCommissionRecordedAt: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
         this.prisma.partnerTransaction.findMany({
           where: { partnerId: userId },
         }),
-        this.prisma.partnerPayoutRequest.findFirst({
+        this.prisma.partnerPayoutRequest.findMany({
           where: { partnerId: userId },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         }),
-        this.prisma.user.findUnique({ where: { id: userId } }),
-      ]);
+        this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } }),
+      ], { isolationLevel: 'RepeatableRead' });
 
     if (!user) {
       throw new HttpException('User not found', 404);
@@ -457,13 +476,49 @@ export class UserService {
       new Decimal(0),
     );
 
+    const paidOut = payouts.reduce(
+      (sum, payout) => payout.status === 'PAID' ? sum.plus(payout.amount) : sum,
+      new Decimal(0),
+    );
     return {
-      referrals,
+      referrals: referrals.map(({ user: referredUser, ...referral }) => {
+        // Legacy resident renewals can leave two local rows for one provider purchase.
+        const purchases = new Map<string, (typeof referredUser.orders)[number]>();
+        for (const order of referredUser.orders) {
+          const purchaseDate = order.partnerCommissionRecordedAt ?? order.createdAt;
+          if (purchaseDate < referral.createdAt) continue;
+          const key = order.orderNumber ? `number:${order.orderNumber}`
+            : order.orderId ? `provider:${order.orderId}` : `local:${order.id}`;
+          const previous = purchases.get(key);
+          if (!previous || (!previous.partnerCommissionRecordedAt && order.partnerCommissionRecordedAt)) {
+            purchases.set(key, order);
+          }
+        }
+        let purchasesTotal = new Decimal(0);
+        let commission = new Decimal(0);
+        let commissionComplete = true;
+        for (const order of purchases.values()) {
+          purchasesTotal = purchasesTotal.plus(order.totalPrice);
+          if (!order.partnerCommissionRecordedAt || order.partnerCommission === null) {
+            if (!order.totalPrice.isZero()) commissionComplete = false;
+          } else if (order.partnerId === userId) {
+            commission = commission.plus(order.partnerCommission);
+          }
+        }
+        return {
+          ...referral,
+          purchasesCount: purchases.size,
+          purchasesTotal: purchasesTotal.toFixed(),
+          commissionAmount: commissionComplete ? commission.toFixed() : null,
+          recordedCommission: commission.toFixed(),
+          commissionComplete,
+        };
+      }),
       transactions: allTransactions,
-      payout,
-      earnedLastMonth,
-      availableBalance,
-      allTimeEarn: user.totalPartnerEarn,
+      payout: payouts[0] ?? null,
+      earnedLastMonth: earnedLastMonth.toFixed(),
+      availableBalance: availableBalance.toFixed(),
+      allTimeEarn: availableBalance.plus(paidOut).toFixed(),
     };
   }
 

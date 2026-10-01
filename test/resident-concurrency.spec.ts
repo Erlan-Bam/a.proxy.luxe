@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../src/domains/v1/shared/prisma.service';
 import { ProductService } from '../src/domains/product/product.service';
 import { OrderService } from '../src/domains/v1/order/order.service';
+import { UserService } from '../src/domains/v1/user/user.service';
 
 const url = process.env.RESIDENT_TEST_DATABASE_URL;
 if (
@@ -146,10 +147,42 @@ beforeAll(async () => {
 });
 afterEach(() => jest.restoreAllMocks());
 afterAll(async () => {
+  await prisma.partnerTransaction.deleteMany({ where: { partnerId: { in: users } } });
+  await prisma.partnerPayoutRequest.deleteMany({ where: { partnerId: { in: users } } });
+  await prisma.referral.deleteMany({ where: { userId: { in: users } } });
   await prisma.order.deleteMany({ where: { userId: { in: users } } });
   await prisma.user.deleteMany({ where: { id: { in: users } } });
   await prisma.coupon.deleteMany({ where: { code: { in: coupons } } });
   await prisma.$disconnect();
+});
+
+it('keeps exact referral commission after payout and replay without changing financial totals', async () => {
+  const f = await fixture();
+  const partner = await prisma.user.create({ data: { email: `${randomUUID()}@resident-test.invalid`, password: 'fixture-only' } });
+  users.push(partner.id);
+  await prisma.referral.create({ data: { partnerId: partner.id, userId: f.user.id } });
+  const order = await f.draft();
+  await f.service.finishResidentOrder(order.id, f.user.id);
+  await f.product().finishResidentOrder(order.id, f.user.id);
+  expect(await f.balance()).toBe(7.6);
+  const stored = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+  expect(stored.partnerId).toBe(partner.id);
+  expect(stored.partnerCommission?.toString()).toBe('0.36');
+  expect(await prisma.partnerTransaction.count({ where: { partnerId: partner.id } })).toBe(1);
+  const statistics = new UserService(prisma, f.service);
+  const before = await statistics.getPartnerDetails(partner.id);
+  expect(before.referrals[0]).toMatchObject({ purchasesCount: 1, purchasesTotal: '2.4', commissionAmount: '0.36', commissionComplete: true });
+  expect(before.availableBalance.toString()).toBe('0.36');
+  expect(before.allTimeEarn.toString()).toBe('0.36');
+  await prisma.$transaction([
+    prisma.partnerPayoutRequest.create({ data: { partnerId: partner.id, amount: '0.36', wallet: 'fixture-only', status: 'PAID', paidAt: new Date() } }),
+    prisma.partnerTransaction.deleteMany({ where: { partnerId: partner.id } }),
+  ]);
+  const after = await statistics.getPartnerDetails(partner.id);
+  expect(after.referrals[0].commissionAmount).toBe('0.36');
+  expect(after.availableBalance.toString()).toBe('0');
+  expect(after.allTimeEarn.toString()).toBe('0.36');
+  expect((await statistics.getPartnerDetails(f.user.id)).referrals).toEqual([]);
 });
 
 it('returns one checkout for duplicate draft creation', async () => {

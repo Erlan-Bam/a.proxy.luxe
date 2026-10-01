@@ -127,6 +127,9 @@ model Order {
   orderId       String?
   orderNumber   String?
   residentFulfillment Json?
+  partnerId     String?
+  partnerCommission Decimal?
+  partnerCommissionRecordedAt DateTime?
   end_date      String
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

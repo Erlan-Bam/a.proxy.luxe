@@ -72,6 +72,7 @@ describe('ProductService.prolongResident', () => {
       structuredClone({
         ...data,
         ...('totalPrice' in data && { totalPrice: Number(data.totalPrice) }),
+        ...('partnerCommission' in data && { partnerCommission: String(data.partnerCommission) }),
       }),
     );
     return structuredClone(candidate);

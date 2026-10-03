@@ -354,6 +354,35 @@ it('replays renewal of the old package owner without another purchase or charge'
   expect(source.orderId).toBe('previous-purchase');
 });
 
+it('retires a superseded legacy processing order before renewing the active package', async () => {
+  const f = await fixture();
+  const staleDate = new Date(f.source.createdAt.getTime() - 86400000);
+  const stale = await prisma.order.create({
+    data: {
+      ...f.dto,
+      status: 'PROCESSING',
+      totalPrice: 2.4,
+      end_date: '14.10.2026',
+      createdAt: staleDate,
+      updatedAt: staleDate,
+    },
+  });
+
+  const result = await f.service.prolongResident({
+    orderId: f.source.id,
+    packageKey: f.pkg.package_key,
+    user: { id: f.user.id },
+  } as any);
+
+  expect(result.status).toBe('success');
+  expect(
+    (await prisma.order.findUniqueOrThrow({ where: { id: stale.id } })).status,
+  ).toBe('CANCELED');
+  expect(f.purchases()).toBe(1);
+  expect(await f.balance()).toBe(7.6);
+  expect(f.pkg.traffic_limit).toBe(String(4 * gib));
+});
+
 it('uses the persisted discounted amount exactly once on a failed update retry', async () => {
   const f = await fixture(),
     order = await f.draft();

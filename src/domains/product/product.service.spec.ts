@@ -364,6 +364,74 @@ describe('ProductService.prolongResident', () => {
     });
   });
 
+  it('cancels a superseded legacy processing order before renewing the active package', async () => {
+    const stale = {
+      ...structuredClone(order),
+      id: '33333333-3333-4333-8333-333333333333',
+      status: 'PROCESSING',
+      proxySellerId: null,
+      orderId: null,
+      orderNumber: null,
+      createdAt: new Date('2026-06-22T10:00:00Z'),
+      updatedAt: new Date('2026-06-22T10:01:00Z'),
+    };
+    orders.unshift(stale);
+
+    const result = await service.prolongResident({
+      orderId: order.id,
+      packageKey: 'resident-package',
+      user: { id: order.userId } as any,
+    });
+
+    expect(orders.find((candidate) => candidate.id === stale.id)?.status).toBe(
+      'CANCELED',
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'success',
+        type: 'resident',
+        price: 2.4,
+        balance: 7.6,
+      }),
+    );
+    expect(proxySeller.post).toHaveBeenCalledTimes(2);
+    expect(prisma.user.updateMany).toHaveBeenCalledTimes(1);
+    expect(balance).toBeCloseTo(7.6);
+    expect(
+      orders.filter((candidate) => candidate.status === 'PAID'),
+    ).toHaveLength(2);
+    expect(
+      orders.filter(
+        (candidate) => candidate.proxySellerId === residentPackage.package_key,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('keeps a newer ambiguous processing order blocked', async () => {
+    orders.push({
+      ...structuredClone(order),
+      id: '44444444-4444-4444-8444-444444444444',
+      status: 'PROCESSING',
+      proxySellerId: null,
+      orderId: null,
+      orderNumber: null,
+      createdAt: new Date('2026-06-24T10:00:00Z'),
+      updatedAt: new Date('2026-06-24T10:01:00Z'),
+    });
+
+    await expect(
+      service.prolongResident({
+        orderId: order.id,
+        packageKey: 'resident-package',
+        user: { id: order.userId } as any,
+      }),
+    ).rejects.toBeInstanceOf(HttpException);
+
+    expect(proxySeller.post).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(balance).toBe(10);
+  });
+
   it('rejects an order that does not belong to the user', async () => {
     await expect(
       service.prolongResident({

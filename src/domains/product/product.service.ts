@@ -1510,11 +1510,31 @@ export class ProductService {
           );
         return this.residentCheckoutResult(completed);
       }
-      const pending = await this.getPendingResidentOrder(data.user.id, tariff);
-      if (pending)
-        return this.finishResidentOrderLocked(pending.id, data.user.id);
       if (order.proxySellerId !== data.packageKey) {
         throw new HttpException('Resident package ownership changed', 409);
+      }
+      const pending = await this.getPendingResidentOrder(data.user.id, tariff);
+      if (pending) {
+        const supersededLegacyOrder =
+          pending.status === 'PROCESSING' &&
+          !pending.orderId &&
+          !pending.residentFulfillment &&
+          pending.createdAt < order.updatedAt;
+        if (!supersededLegacyOrder) {
+          return this.finishResidentOrderLocked(pending.id, data.user.id);
+        }
+        const canceled = await this.prisma.order.updateMany({
+          where: {
+            id: pending.id,
+            status: 'PROCESSING',
+            orderId: null,
+            residentFulfillment: { equals: Prisma.DbNull },
+          },
+          data: { status: 'CANCELED' },
+        });
+        if (canceled.count !== 1) {
+          throw new HttpException('Resident order state changed', 409);
+        }
       }
       const reference = await this.getProductReferenceByType('resident');
       if (

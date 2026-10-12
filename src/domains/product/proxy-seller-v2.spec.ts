@@ -2,58 +2,54 @@ import { ConfigService } from '@nestjs/config';
 import { ProductService } from './product.service';
 
 describe('Proxy-Seller v2 purchase contract', () => {
-  it('serves current v2 countries to the purchase form', async () => {
+  it('serves the purchase catalog locally without calling Proxy-Seller', async () => {
     const service = new ProductService(new ConfigService(), {} as any);
-    const api = (service as any).proxySeller;
-    api.get = jest.fn().mockResolvedValue({
-      data: {
-        status: 'success',
-        data: {
-          isp: {
-            country: [{ id: 'GBR', name: 'England' }],
-            period: [],
-            target: [],
-          },
-          ipv6: {
-            country: [{ id: 'DEU', name: 'Germany' }],
-            period: [],
-            target: [],
-          },
-          resident: {
-            tarifs: [{ id: '1-gb-ind1', name: '1 GB', personal: true }],
-            target: [],
-          },
-        },
-      },
-    });
+    const get = jest.fn();
+    (service as any).proxySeller.get = get;
 
     await expect(service.getProductReference()).resolves.toMatchObject({
-      isp: { country: [{ id: 'GBR', name: 'England' }] },
-      ipv6: { country: [{ id: 'DEU', name: 'Germany' }] },
-      resident: { tariffs: [{ id: '1-gb-ind1', name: '1 Gb' }] },
-    });
-  });
-
-  it('accepts reference lists without the legacy target field', async () => {
-    const service = new ProductService(new ConfigService(), {} as any);
-    const api = (service as any).proxySeller;
-    api.get = jest.fn().mockResolvedValue({
-      data: {
-        status: 'success',
-        data: {
-          items: {
-            tarifs: [{ id: '10-gb-ind2', name: '10 GB', personal: true }],
-          },
-        },
+      status: 'success',
+      isp: {
+        country: expect.arrayContaining([
+          expect.objectContaining({ id: 'USA' }),
+        ]),
+      },
+      ipv6: {
+        country: expect.arrayContaining([
+          expect.objectContaining({ id: 'DEU' }),
+        ]),
+      },
+      resident: {
+        tariffs: expect.arrayContaining([
+          expect.objectContaining({ id: 25208 }),
+          expect.objectContaining({ id: 25209 }),
+        ]),
       },
     });
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('keeps the local catalog stable between requests', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const first = await service.getProductReference();
+    await expect(service.getProductReference()).resolves.toEqual(first);
+  });
+
+  it('serves resident tariff references locally without calling Proxy-Seller', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const api = (service as any).proxySeller;
+    api.get = jest.fn();
     await expect(
       service.getProductReferenceByType('resident'),
     ).resolves.toMatchObject({
       status: 'success',
       targets: [],
-      tariffs: [{ id: '10-gb-ind2', name: '10 Gb' }],
+      tariffs: expect.arrayContaining([
+        { id: 25208, name: '1 Gb', personal: true },
+        { id: 25209, name: '3 Gb', personal: true },
+      ]),
     });
+    expect(api.get).not.toHaveBeenCalled();
   });
 
   it('uses the v2 API and selects provider balance for nonresident orders', async () => {

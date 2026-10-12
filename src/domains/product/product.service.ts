@@ -6,10 +6,6 @@ import {
   ResidentCheckpoint,
 } from './resident-provisioner';
 import {
-  ReferenceResponse,
-  ReferenceSingleResponse,
-} from './dto/reference.response';
-import {
   ResponseCalcDTO,
   ResponseErrorDTO,
   ResponseReferenceDTO,
@@ -27,6 +23,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { UpdateResident } from './dto/update-resident.dto';
 import { ProlongResidentDto } from './dto/prolong-resident.dto';
 import { IpAuthorizationRdo } from './rdo/ip-authorization.rdo';
+import { productReferenceFallback } from './product-reference-fallback';
 
 @Injectable()
 export class ProductService {
@@ -208,45 +205,7 @@ export class ProductService {
   async getProductReference(): Promise<
     ResponseReferenceDTO | ResponseErrorDTO
   > {
-    const response: AxiosResponse<ReferenceResponse> =
-      await this.proxySeller.get('/reference/list');
-    const reference = response.data;
-
-    if (!reference.data) {
-      return {
-        status: 'error',
-        message: 'Error accessing the service. Repeat the request later!',
-      };
-    }
-
-    const { isp, ipv6, resident } = reference.data;
-    const targets = (items: typeof isp.target) =>
-      (items ?? []).map(({ sectionId, name }) => ({ sectionId, name }));
-
-    return {
-      status: 'success',
-      isp: {
-        country: isp.country,
-        period: isp.period,
-        targets: targets(isp.target),
-      },
-      ipv6: {
-        country: ipv6.country,
-        period: ipv6.period,
-        targets: targets(ipv6.target),
-      },
-      resident: {
-        tariffs: resident.tarifs.map((tariff) => ({
-          ...tariff,
-          name: tariff.name.replace(/\bGB\b/g, 'Gb'),
-        })),
-        targets: targets(resident.target),
-      },
-      amounts: [1, 10, 20, 30, 50, 100].map((amount) => ({
-        id: String(amount),
-        text: `${amount} шт`,
-      })),
-    };
+    return productReferenceFallback;
   }
 
   async getGeoReference() {
@@ -272,54 +231,18 @@ export class ProductService {
     if (!Object.keys(Proxy).includes(type)) {
       throw new HttpException('Invalid type', 400);
     }
-    const response: AxiosResponse<ReferenceSingleResponse> =
-      await this.proxySeller.get(`/reference/list/${type}`);
-    const reference = response.data;
-
-    if (!reference.data) {
-      return {
-        status: 'error',
-        message: 'Error accessing the service. Repeat the request later!',
-      };
-    }
-    const amounts = [
-      {
-        id: '10',
-        text: '10 шт',
-      },
-      {
-        id: '20',
-        text: '20 шт',
-      },
-      {
-        id: '30',
-        text: '30 шт',
-      },
-      {
-        id: '50',
-        text: '50 шт',
-      },
-      {
-        id: '100',
-        text: '100 шт',
-      },
-    ];
+    const reference = productReferenceFallback[type as Proxy];
 
     return {
       status: 'success',
-      country: reference?.data.items.country ?? [],
-      targets: (reference?.data.items.target ?? []).map(
-        ({ sectionId, name }) => ({
-          sectionId,
-          name,
-        }),
-      ),
-      period: reference?.data.items.period ?? [],
-      tariffs: reference?.data.items.tarifs?.map((tariff) => ({
-        ...tariff,
-        name: tariff.name.replace(/\bGB\b/g, 'Gb'),
-      })),
-      amounts: type !== 'resident' ? amounts : undefined,
+      country: 'country' in reference ? reference.country : [],
+      targets: reference.targets,
+      period: 'period' in reference ? reference.period : [],
+      tariffs: 'tariffs' in reference ? reference.tariffs : undefined,
+      amounts:
+        type !== 'resident'
+          ? productReferenceFallback.amounts.filter(({ id }) => id !== '1')
+          : undefined,
     };
   }
 

@@ -2,6 +2,38 @@ import { ConfigService } from '@nestjs/config';
 import { ProductService } from './product.service';
 
 describe('Proxy-Seller v2 purchase contract', () => {
+  it('serves current v2 countries to the purchase form', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const api = (service as any).proxySeller;
+    api.get = jest.fn().mockResolvedValue({
+      data: {
+        status: 'success',
+        data: {
+          isp: {
+            country: [{ id: 'GBR', name: 'England' }],
+            period: [],
+            target: [],
+          },
+          ipv6: {
+            country: [{ id: 'DEU', name: 'Germany' }],
+            period: [],
+            target: [],
+          },
+          resident: {
+            tarifs: [{ id: '1-gb-ind1', name: '1 GB', personal: true }],
+            target: [],
+          },
+        },
+      },
+    });
+
+    await expect(service.getProductReference()).resolves.toMatchObject({
+      isp: { country: [{ id: 'GBR', name: 'England' }] },
+      ipv6: { country: [{ id: 'DEU', name: 'Germany' }] },
+      resident: { tariffs: [{ id: '1-gb-ind1', name: '1 Gb' }] },
+    });
+  });
+
   it('accepts reference lists without the legacy target field', async () => {
     const service = new ProductService(new ConfigService(), {} as any);
     const api = (service as any).proxySeller;
@@ -62,14 +94,12 @@ describe('Proxy-Seller v2 purchase contract', () => {
   it('selects provider balance when extending an ISP proxy', async () => {
     const prisma = {
       order: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({
-            id: 'order',
-            userId: 'customer',
-            type: 'isp',
-            end_date: '30.10.2026',
-          }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order',
+          userId: 'customer',
+          type: 'isp',
+          end_date: '30.10.2026',
+        }),
         update: jest.fn().mockResolvedValue({}),
         create: jest.fn().mockResolvedValue({}),
       },
@@ -80,11 +110,9 @@ describe('Proxy-Seller v2 purchase contract', () => {
     };
     const service = new ProductService(new ConfigService(), prisma as any);
     const api = (service as any).proxySeller;
-    api.post = jest
-      .fn()
-      .mockResolvedValue({
-        data: { status: 'success', data: { orderId: 42 } },
-      });
+    api.post = jest.fn().mockResolvedValue({
+      data: { status: 'success', data: { orderId: 42 } },
+    });
     jest.spyOn(console, 'log').mockImplementation(() => {});
     try {
       await service.prolongProxy({

@@ -15,6 +15,7 @@ import { OrderInfo } from '../../product/dto/order.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { UserService } from '../user/user.service';
 import { AdminLogQuery, buildAdminLogQueries } from './admin-log-query';
+import { matchesOrderCountry } from './country-name';
 
 type AdminLogParams = AdminLogQuery & {
   ordersPage: number;
@@ -108,7 +109,7 @@ export class OrderService {
     }
     if (createOrderDto.type !== 'resident') {
       const isValidCountry = reference.country.some((current) =>
-        current.name.endsWith(createOrderDto.country),
+        matchesOrderCountry(current.name, createOrderDto.country),
       );
       if (!isValidCountry) {
         throw new HttpException('Invalid country', 400);
@@ -490,7 +491,8 @@ export class OrderService {
         paymentId: 1,
         tariff: order.tariff ? order.tariff : undefined,
         countryId: reference.country?.find(
-          (country) => order.country && country.name.endsWith(order.country),
+          (country) =>
+            order.country && matchesOrderCountry(country.name, order.country),
         )?.id,
         tariffId: reference.tariffs?.find(
           (tariff) =>

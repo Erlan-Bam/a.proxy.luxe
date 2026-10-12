@@ -84,4 +84,25 @@ describe('ProductService.getActiveProxyList', () => {
       expect.objectContaining({ id: 'legacy-proxy', orderId }),
     ]);
   });
+
+  it('matches renewed ISP proxies by the original base order number', async () => {
+    const { service } = createService(
+      [{ id: orderId, proxySellerId: '1733674913', orderNumber }],
+      [
+        {
+          id: 'renewed-proxy',
+          order_id: 'new-provider-order-id',
+          order_number: 'new-renewal-number',
+          base_order_number: orderNumber,
+        },
+      ],
+    );
+
+    const result = await service.getActiveProxyList(userId, 'isp');
+
+    expect(result.status).toBe('success');
+    expect(result.data?.items).toEqual([
+      expect.objectContaining({ id: 'renewed-proxy', orderId }),
+    ]);
+  });
 });

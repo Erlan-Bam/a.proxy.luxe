@@ -344,8 +344,10 @@ export class ProductService {
       const getOwnedOrderId = (item: {
         order_id: string | number;
         order_number?: string;
+        base_order_number?: string;
       }) =>
         orderNumberMap.get(item.order_number ?? null) ??
+        orderNumberMap.get(item.base_order_number ?? null) ??
         proxySellerMap.get(String(item.order_id));
       const orderByProxySellerId = new Map(
         orders.map((order) => [String(order.proxySellerId), order]),
@@ -378,6 +380,7 @@ export class ProductService {
                 password,
                 order_id,
                 order_number,
+                base_order_number,
                 auth_ip,
                 can_prolong,
                 date_end,
@@ -394,7 +397,11 @@ export class ProductService {
                 order_number,
                 auth_ip,
                 can_prolong,
-                orderId: getOwnedOrderId({ order_id, order_number }),
+                orderId: getOwnedOrderId({
+                  order_id,
+                  order_number,
+                  base_order_number,
+                }),
                 date_end,
               }),
             ) ?? [];

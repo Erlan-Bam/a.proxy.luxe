@@ -37,7 +37,7 @@ export class ProductService {
     private prisma: PrismaService,
   ) {
     this.proxySeller = axios.create({
-      baseURL: `https://proxy-seller.com/personal/api/v1/${configService.get<string>('PROXY_SELLER')}`,
+      baseURL: `https://proxy-seller.com/personal/api/v2/${configService.get<string>('PROXY_SELLER')}`,
     });
   }
 
@@ -782,13 +782,18 @@ export class ProductService {
 
     return {
       status: 'success',
-      country: reference?.data.items.country,
-      targets: reference?.data.items.target.map(({ sectionId, name }) => ({
-        sectionId,
-        name,
+      country: reference?.data.items.country ?? [],
+      targets: (reference?.data.items.target ?? []).map(
+        ({ sectionId, name }) => ({
+          sectionId,
+          name,
+        }),
+      ),
+      period: reference?.data.items.period ?? [],
+      tariffs: reference?.data.items.tarifs?.map((tariff) => ({
+        ...tariff,
+        name: tariff.name.replace(/\bGB\b/g, 'Gb'),
       })),
-      period: reference?.data.items.period,
-      tariffs: reference?.data.items.tarifs,
       amounts: type !== 'resident' ? amounts : undefined,
     };
   }
@@ -1048,8 +1053,9 @@ export class ProductService {
         const requestPayload: any = {
           countryId: orderInfo.countryId,
           periodId: orderInfo.periodId,
-          paymentId: 1,
+          paymentId: 'balance',
           quantity: orderInfo.quantity,
+          sectionCode: orderInfo.type,
         };
 
         // Add optional fields only if provided
@@ -1153,7 +1159,7 @@ export class ProductService {
     const response = await this.proxySeller.post(`/prolong/make/${data.type}`, {
       ids: data.id,
       periodId: data.periodId,
-      paymentId: '1',
+      paymentId: 'balance',
     });
     console.log('response', response.data);
     if (response.data.status !== 'success') {
@@ -1399,7 +1405,9 @@ export class ProductService {
             include: { referredBy: true },
           });
           const partnerId = customer?.referredBy?.partnerId ?? null;
-          const partnerCommission = partnerId ? settledPrice.mul(0.15) : new Decimal(0);
+          const partnerCommission = partnerId
+            ? settledPrice.mul(0.15)
+            : new Decimal(0);
           const updated = await tx.order.update({
             where: { id: order.id },
             data: {

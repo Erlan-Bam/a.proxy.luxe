@@ -7,7 +7,7 @@ export interface OrderInfo {
   charge?: string;
   discountCode?: string;
   protocol?: string | undefined;
-  countryId?: number | undefined;
+  countryId?: number | string | undefined;
   periodId?: string | undefined;
   coupon?: string;
   tariff?: string | undefined;
@@ -15,7 +15,7 @@ export interface OrderInfo {
   quantity?: number;
   authorization?: string;
   targetId?: number;
-  tariffId?: number;
+  tariffId?: number | string;
   targetSectionId?: number;
   customTargetName?: null | string;
   userId: string;

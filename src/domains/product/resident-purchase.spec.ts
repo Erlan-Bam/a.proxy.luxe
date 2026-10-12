@@ -136,6 +136,8 @@ describe('resident purchase recovery', () => {
     rejectUpdate = false;
     const result = await service.placeOrder(info);
     expect(result.orderId).toBe('1266906093');
+    expect(api.post).toHaveBeenCalledWith('/order/make',
+      { tarifId: 25208, paymentId: 'balance' }, { timeout: 30000 });
     expect(api.post.mock.calls.filter(([path]) => path === '/order/make')).toHaveLength(1);
     expect(packageInfo.traffic_limit).toBe('4294967296');
   });

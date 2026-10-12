@@ -1,5 +1,5 @@
 export interface Country {
-  id: number;
+  id: number | string;
   name: string;
   alpha3: string;
 }
@@ -27,7 +27,7 @@ export interface Target {
 }
 
 export interface Tariff {
-  id: number;
+  id: number | string;
   name: string;
   personal: boolean;
 }
@@ -89,9 +89,9 @@ export interface ReferenceSingleResponse {
   status: 'success' | 'error';
   data: {
     items: {
-      country: Country[];
-      period: Period[];
-      target: Target[];
+      country?: Country[];
+      period?: Period[];
+      target?: Target[];
       tarifs: Tariff[];
     };
   };

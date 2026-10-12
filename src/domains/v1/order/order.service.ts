@@ -39,11 +39,6 @@ export class OrderService {
       return this.productService.withResidentLock(
         createOrderDto.userId,
         async () => {
-          const pending = await this.productService.getPendingResidentOrder(
-            createOrderDto.userId,
-            createOrderDto.tariff,
-          );
-          if (pending) return pending;
           const latest = await this.prisma.order.findFirst({
             where: {
               userId: createOrderDto.userId,
@@ -52,6 +47,24 @@ export class OrderService {
             },
             orderBy: { updatedAt: 'desc' },
           });
+          if (latest) {
+            await this.prisma.order.updateMany({
+              where: {
+                userId: createOrderDto.userId,
+                type: 'resident',
+                status: 'PROCESSING',
+                createdAt: { lt: latest.updatedAt },
+                orderId: null,
+                residentFulfillment: { equals: Prisma.DbNull },
+              },
+              data: { status: 'CANCELED' },
+            });
+          }
+          const pending = await this.productService.getPendingResidentOrder(
+            createOrderDto.userId,
+            createOrderDto.tariff,
+          );
+          if (pending) return pending;
           const draft = await this.prisma.order.findFirst({
             where: {
               userId: createOrderDto.userId,
@@ -186,8 +199,15 @@ export class OrderService {
     const orderQuery = {
       where: orderWhere,
       select: {
-        id: true, orderId: true, orderNumber: true, type: true, goal: true,
-        status: true, totalPrice: true, createdAt: true, updatedAt: true,
+        id: true,
+        orderId: true,
+        orderNumber: true,
+        type: true,
+        goal: true,
+        status: true,
+        totalPrice: true,
+        createdAt: true,
+        updatedAt: true,
         user: { select: { email: true } },
       } satisfies Prisma.OrderSelect,
       orderBy,
@@ -204,7 +224,11 @@ export class OrderService {
       where: paymentWhere,
       orderBy: paymentOrderBy,
       select: {
-        id: true, method: true, price: true, createdAt: true, updatedAt: true,
+        id: true,
+        method: true,
+        price: true,
+        createdAt: true,
+        updatedAt: true,
         user: { select: { email: true } },
       } satisfies Prisma.PaymentSelect,
     };
@@ -489,7 +513,9 @@ export class OrderService {
 
       // Phase 3: Retryable DB transaction (balance + order status + partner)
       const partnerId = user.referredBy?.partnerId ?? null;
-      const partnerCommission = partnerId ? new Decimal(totalPrice).mul(0.15).toNumber() : 0;
+      const partnerCommission = partnerId
+        ? new Decimal(totalPrice).mul(0.15).toNumber()
+        : 0;
       const response = await this.executeWithRetry(() =>
         this.prisma.$transaction(
           async (prisma) => {

@@ -51,10 +51,16 @@ describe('ProductService.prolongResident', () => {
           );
         }
         if ('not' in condition) {
-          return !isDeepStrictEqual(value, condition.not === Prisma.DbNull ? null : condition.not);
+          return !isDeepStrictEqual(
+            value,
+            condition.not === Prisma.DbNull ? null : condition.not,
+          );
         }
         if ('equals' in condition) {
-          return isDeepStrictEqual(value, condition.equals === Prisma.DbNull ? null : condition.equals);
+          return isDeepStrictEqual(
+            value,
+            condition.equals === Prisma.DbNull ? null : condition.equals,
+          );
         }
         if ('gt' in condition) return value > condition.gt;
         throw new Error(`Unsupported order filter: ${field}`);
@@ -72,7 +78,9 @@ describe('ProductService.prolongResident', () => {
       structuredClone({
         ...data,
         ...('totalPrice' in data && { totalPrice: Number(data.totalPrice) }),
-        ...('partnerCommission' in data && { partnerCommission: String(data.partnerCommission) }),
+        ...('partnerCommission' in data && {
+          partnerCommission: String(data.partnerCommission),
+        }),
       }),
     );
     return structuredClone(candidate);
@@ -251,7 +259,7 @@ describe('ProductService.prolongResident', () => {
     expect(proxySeller.post).toHaveBeenNthCalledWith(
       1,
       '/order/make',
-      { tarifId: tariffId, paymentId: 1 },
+      { tarifId: tariffId, paymentId: 'balance' },
       { timeout: 30000 },
     );
     expect(proxySeller.post).toHaveBeenNthCalledWith(

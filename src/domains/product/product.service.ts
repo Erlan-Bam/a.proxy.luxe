@@ -336,6 +336,17 @@ export class ProductService {
       const proxySellerMap = new Map(
         orders.map((order) => [String(order.proxySellerId), order.id]),
       );
+      const orderNumberMap = new Map(
+        orders
+          .filter((order) => order.orderNumber)
+          .map((order) => [order.orderNumber, order.id]),
+      );
+      const getOwnedOrderId = (item: {
+        order_id: string | number;
+        order_number?: string;
+      }) =>
+        orderNumberMap.get(item.order_number ?? null) ??
+        proxySellerMap.get(String(item.order_id));
       const orderByProxySellerId = new Map(
         orders.map((order) => [String(order.proxySellerId), order]),
       );
@@ -354,7 +365,7 @@ export class ProductService {
 
         const filteredItems =
           response.data.data.items
-            ?.filter((item) => proxySellerMap.has(String(item.order_id)))
+            ?.filter((item) => Boolean(getOwnedOrderId(item)))
             ?.map(
               ({
                 id,
@@ -383,7 +394,7 @@ export class ProductService {
                 order_number,
                 auth_ip,
                 can_prolong,
-                orderId: proxySellerMap.get(String(order_id)),
+                orderId: getOwnedOrderId({ order_id, order_number }),
                 date_end,
               }),
             ) ?? [];

@@ -68,6 +68,21 @@ describe('resident checkout billing and retry routing', () => {
       $transaction: jest.fn(async callback => callback(prisma)) };
     service = new ProductService(new ConfigService(), prisma);
     (service as any).withResidentLock = jest.fn(async (_id, fn) => fn());
+    (service as any).proxySeller.get = jest.fn(async (path: string) => {
+      if (path !== '/reference/list/resident')
+        throw new Error(`Unexpected provider request: ${path}`);
+      return {
+        data: {
+          status: 'success',
+          data: {
+            items: {
+              tarifs: [{ id: '1-gb-ind1', name: '1 GB', personal: true }],
+            },
+          },
+          errors: [],
+        },
+      };
+    });
     jest.spyOn(service, 'getProductReferenceByType').mockResolvedValue({ status: 'success',
       tariffs: [{ id: 25208, name: '1 Gb', personal: true }] } as any);
     jest.spyOn(service, 'placeOrder').mockImplementation(async ({ charge }) => {

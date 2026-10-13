@@ -203,6 +203,22 @@ describe('ProductService.prolongResident', () => {
       ],
     } as any);
     proxySeller.get.mockImplementation(async (path: string) => {
+      if (path === '/reference/list/resident') {
+        return {
+          data: {
+            status: 'success',
+            data: {
+              items: {
+                tarifs: [
+                  { id: 101, name: '1 GB', personal: true },
+                  { id: 103, name: '3 GB', personal: true },
+                ],
+              },
+            },
+            errors: [],
+          },
+        };
+      }
       if (path === '/resident/package') {
         return {
           data: {
@@ -371,6 +387,188 @@ describe('ProductService.prolongResident', () => {
       tariff: '3 Gb',
     });
   });
+
+  it('uses the current provider tariff id instead of a stale local catalog id', async () => {
+    jest.spyOn(service, 'getProductReferenceByType').mockResolvedValue({
+      status: 'success',
+      tariffs: [{ id: 25209, name: '3 Gb', personal: true }],
+    } as any);
+    const getProviderData = proxySeller.get.getMockImplementation();
+    proxySeller.get.mockImplementation(async (path: string, ...args: any[]) => {
+      if (path === '/reference/list/resident') {
+        return {
+          data: {
+            status: 'success',
+            data: {
+              items: {
+                tarifs: [{ id: '3-gb-ind1', name: '3 GB', personal: true }],
+              },
+            },
+            errors: [],
+          },
+        };
+      }
+      return getProviderData!(path, ...args);
+    });
+
+    await service.prolongResident({
+      orderId: order.id,
+      packageKey: 'resident-package',
+      tariff: '3 Gb',
+      user: { id: order.userId } as any,
+    });
+
+    expect(proxySeller.post).toHaveBeenNthCalledWith(
+      1,
+      '/order/make',
+      { tarifId: '3-gb-ind1', paymentId: 'balance' },
+      { timeout: 30000 },
+    );
+  });
+
+  it('stops before processing or charging when the provider tariff catalog is unavailable', async () => {
+    const getProviderData = proxySeller.get.getMockImplementation();
+    proxySeller.get.mockImplementation(async (path: string, ...args: any[]) => {
+      if (path === '/reference/list/resident') {
+        return {
+          data: {
+            status: 'error',
+            data: null,
+            errors: [{ message: 'Reference temporarily unavailable' }],
+          },
+        };
+      }
+      return getProviderData!(path, ...args);
+    });
+
+    await expect(
+      service.prolongResident({
+        orderId: order.id,
+        packageKey: 'resident-package',
+        user: { id: order.userId } as any,
+      }),
+    ).rejects.toMatchObject({
+      status: 502,
+      message: 'Unable to load current resident tariffs',
+    });
+
+    expect(proxySeller.post).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(orders).toEqual([
+      expect.objectContaining({ id: order.id, status: 'PAID' }),
+      expect.objectContaining({
+        id: 'renewal-order-1',
+        status: 'PENDING',
+        residentFulfillment: null,
+      }),
+    ]);
+  });
+
+  it('resumes an existing provision checkpoint without reloading the tariff catalog', async () => {
+    balance = 7.6;
+    orders.push({
+      ...structuredClone(order),
+      id: 'renewal-order-1',
+      status: 'PROCESSING',
+      proxySellerId: null,
+      orderId: '12345',
+      orderNumber: 'resident-renewal-12345',
+      residentFulfillment: {
+        stage: 'purchased',
+        sourceOrderId: order.id,
+        packageKey: 'resident-package',
+        baseline: String(1024 ** 3),
+        target: String(2 * 1024 ** 3),
+        desiredExpiry: '22.08.2026',
+        charge: '2.4',
+        fundsReserved: true,
+      },
+      createdAt: new Date('2026-07-23T23:30:00Z'),
+      updatedAt: new Date('2026-07-23T23:30:00Z'),
+    });
+    const getProviderData = proxySeller.get.getMockImplementation();
+    proxySeller.get.mockImplementation(async (path: string, ...args: any[]) => {
+      if (path === '/reference/list/resident') {
+        return {
+          data: { status: 'error', data: null, errors: [] },
+        };
+      }
+      return getProviderData!(path, ...args);
+    });
+    jest.spyOn(service, 'placeOrder').mockResolvedValue({
+      orderId: '12345',
+      orderNumber: 'resident-renewal-12345',
+      package_key: 'resident-package',
+      end_date: '22.08.2026',
+    });
+
+    const result = await service.finishResidentOrder(
+      'renewal-order-1',
+      order.userId,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ status: 'success' }));
+    expect(proxySeller.get).not.toHaveBeenCalledWith(
+      '/reference/list/resident',
+      expect.anything(),
+    );
+    expect(service.placeOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ tariffId: undefined }),
+    );
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(balance).toBe(7.6);
+  });
+
+  it.each([
+    ['whitespace', ' '],
+    ['zero', 0],
+    ['negative', -1],
+  ])(
+    'rejects a %s live tariff id before processing or charging',
+    async (_case, tariffId) => {
+      const getProviderData = proxySeller.get.getMockImplementation();
+      proxySeller.get.mockImplementation(
+        async (path: string, ...args: any[]) => {
+          if (path === '/reference/list/resident') {
+            return {
+              data: {
+                status: 'success',
+                data: {
+                  items: {
+                    tarifs: [
+                      { id: tariffId, name: '1 GB', personal: true },
+                    ],
+                  },
+                },
+                errors: [],
+              },
+            };
+          }
+          return getProviderData!(path, ...args);
+        },
+      );
+
+      await expect(
+        service.prolongResident({
+          orderId: order.id,
+          packageKey: 'resident-package',
+          user: { id: order.userId } as any,
+        }),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: 'Resident tariff not found',
+      });
+
+      expect(proxySeller.post).not.toHaveBeenCalled();
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+      expect(orders[1]).toEqual(
+        expect.objectContaining({
+          status: 'PENDING',
+          residentFulfillment: null,
+        }),
+      );
+    },
+  );
 
   it('cancels a superseded legacy processing order before renewing the active package', async () => {
     const stale = {

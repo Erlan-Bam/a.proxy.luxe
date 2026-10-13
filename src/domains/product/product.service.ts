@@ -246,6 +246,41 @@ export class ProductService {
     };
   }
 
+  private async getCurrentResidentTariffId(
+    tariffName: string,
+  ): Promise<string | number> {
+    try {
+      const response = await this.proxySeller.get('/reference/list/resident', {
+        timeout: 20000,
+      });
+      const tariffs = response.data?.data?.items?.tarifs;
+      if (response.data?.status !== 'success' || !Array.isArray(tariffs)) {
+        throw new HttpException('Unable to load current resident tariffs', 502);
+      }
+      const normalizedName = tariffName.trim().toLowerCase();
+      const tariff = tariffs.find((item: unknown) => {
+        if (typeof item !== 'object' || item === null) return false;
+        const candidate = item as Record<string, unknown>;
+        return (
+          candidate.personal === true &&
+          typeof candidate.name === 'string' &&
+          candidate.name.trim().toLowerCase() === normalizedName
+        );
+      }) as Record<string, unknown> | undefined;
+      const tariffId = tariff?.id;
+      if (typeof tariffId === 'string') {
+        const normalizedId = tariffId.trim();
+        if (normalizedId) return normalizedId;
+      } else if (Number.isSafeInteger(tariffId) && Number(tariffId) > 0) {
+        return tariffId as number;
+      }
+      throw new HttpException('Resident tariff not found', 400);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Unable to load current resident tariffs', 502);
+    }
+  }
+
   async getCalc(
     query: CalcRequestDTO,
   ): Promise<ResponseCalcDTO | ResponseErrorDTO> {
@@ -799,16 +834,9 @@ export class ProductService {
       (!checkpoint?.fundsReserved && new Decimal(user.balance).lt(price))
     )
       throw new HttpException('Insufficient balance', 400);
-    const reference = await this.getProductReferenceByType('resident');
-    if (reference.status !== 'success')
-      throw new HttpException(
-        reference.message || 'Invalid reference data',
-        502,
-      );
-    const tariff = reference.tariffs?.find(
-      (t) => t.personal && t.name.toLowerCase() === order.tariff?.toLowerCase(),
-    );
-    if (!tariff) throw new HttpException('Resident tariff not found', 400);
+    const tariffId = checkpoint
+      ? undefined
+      : await this.getCurrentResidentTariffId(order.tariff!);
 
     const started = await this.prisma.order.updateMany({
       where: { id: order.id, status: { in: ['PENDING', 'PROCESSING'] } },
@@ -828,7 +856,7 @@ export class ProductService {
         orderId: order.id,
         userId,
         tariff: order.tariff!,
-        tariffId: tariff.id,
+        tariffId,
         paymentId: 1,
         charge: price.toString(),
         discountCode,

@@ -1,5 +1,5 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import axios, { Axios, AxiosResponse } from 'axios';
+import axios, { Axios } from 'axios';
 import { ConfigService } from '@nestjs/config';
 import {
   ResidentProvisioner,
@@ -25,10 +25,26 @@ import { ProlongResidentDto } from './dto/prolong-resident.dto';
 import { IpAuthorizationRdo } from './rdo/ip-authorization.rdo';
 import { productReferenceFallback } from './product-reference-fallback';
 import { ProviderOrderRejectedException } from './provider-order-rejected.exception';
+import {
+  ProviderReadCache,
+  ProviderReadCachePolicy,
+} from './provider-read-cache';
+
+const PROVIDER_LIST_CACHE: ProviderReadCachePolicy = {
+  ttlMs: 20 * 1000,
+  staleIfErrorMs: 2 * 60 * 1000,
+  retryAfterErrorMs: 30 * 1000,
+};
+const PROVIDER_AUTH_CACHE: ProviderReadCachePolicy = {
+  ttlMs: 15 * 1000,
+  staleIfErrorMs: 60 * 1000,
+  retryAfterErrorMs: 30 * 1000,
+};
 
 @Injectable()
 export class ProductService {
   private readonly proxySeller: Axios;
+  private readonly providerReadCache = new ProviderReadCache();
 
   constructor(
     private readonly configService: ConfigService,
@@ -37,6 +53,37 @@ export class ProductService {
     this.proxySeller = axios.create({
       baseURL: `https://proxy-seller.com/personal/api/v2/${configService.get<string>('PROXY_SELLER')}`,
     });
+  }
+
+  private getProviderData<T extends { status?: string }>(
+    path: string,
+    policy: ProviderReadCachePolicy,
+  ): Promise<T> {
+    return this.providerReadCache.get(
+      path,
+      policy,
+      async () => (await this.proxySeller.get(path)).data as T,
+      (data) => this.isProviderReadCacheable(path, data),
+    );
+  }
+
+  private isProviderReadCacheable(
+    path: string,
+    response: { status?: string; data?: unknown },
+  ): boolean {
+    if (response?.status !== 'success') return false;
+    if (path.startsWith('/proxy/list/')) {
+      return (
+        typeof response.data === 'object' &&
+        response.data !== null &&
+        Array.isArray((response.data as { items?: unknown }).items)
+      );
+    }
+    return Array.isArray(response.data);
+  }
+
+  private invalidateProviderReads(...prefixes: string[]): void {
+    this.providerReadCache.invalidate(...prefixes);
   }
 
   async addAuth(userId: string, orderNumber: string, ip: string) {
@@ -68,7 +115,10 @@ export class ProductService {
         );
         const proxyLists = await Promise.allSettled(
           ['isp', 'ipv6'].map((type) =>
-            this.proxySeller.get(`/proxy/list/${type}`),
+            this.getProviderData<any>(
+              `/proxy/list/${type}`,
+              PROVIDER_LIST_CACHE,
+            ),
           ),
         );
 
@@ -76,12 +126,12 @@ export class ProductService {
         for (const result of proxyLists) {
           if (
             result.status !== 'fulfilled' ||
-            result.value.data?.status !== 'success'
+            result.value?.status !== 'success'
           ) {
             continue;
           }
 
-          const matchingProxy = result.value.data?.data?.items?.find(
+          const matchingProxy = result.value?.data?.items?.find(
             (item) =>
               item.order_number === orderNumber &&
               ownedOrderIds.has(String(item.order_id)),
@@ -130,6 +180,8 @@ export class ProductService {
         );
       }
 
+      this.invalidateProviderReads('/auth/list', '/proxy/list/');
+
       return {
         status: 'success',
         data: response.data.data,
@@ -148,12 +200,15 @@ export class ProductService {
     providerOrderId: string,
     providerProxyId: string,
   ): Promise<string | null> {
-    const response = await this.proxySeller.get(`/proxy/list/${type}`);
-    if (response.data?.status !== 'success') {
+    const response = await this.getProviderData<any>(
+      `/proxy/list/${type}`,
+      PROVIDER_LIST_CACHE,
+    );
+    if (response?.status !== 'success') {
       throw new HttpException('Unable to resolve provider order number', 502);
     }
 
-    const items = response.data?.data?.items;
+    const items = response?.data?.items;
     if (!Array.isArray(items)) {
       return null;
     }
@@ -170,12 +225,15 @@ export class ProductService {
   async getIpAuthorizations(
     orderNumber: string,
   ): Promise<IpAuthorizationRdo[]> {
-    const response = await this.proxySeller.get('/auth/list');
-    if (response.data?.status !== 'success') {
+    const response = await this.getProviderData<any>(
+      '/auth/list',
+      PROVIDER_AUTH_CACHE,
+    );
+    if (response?.status !== 'success') {
       throw new HttpException('Unable to load IP authorizations', 502);
     }
 
-    const items = Array.isArray(response.data.data) ? response.data.data : [];
+    const items = Array.isArray(response.data) ? response.data : [];
     return items
       .filter(
         (item: any) =>
@@ -201,6 +259,7 @@ export class ProductService {
     ) {
       throw new HttpException('Unable to delete IP authorization', 502);
     }
+    this.invalidateProviderReads('/auth/list', '/proxy/list/');
   }
 
   async getProductReference(): Promise<
@@ -219,6 +278,11 @@ export class ProductService {
         rotation: data.rotation,
         package_key: data.package_key,
       });
+
+      this.invalidateProviderReads(
+        '/residentsubuser/packages',
+        '/residentsubuser/lists',
+      );
 
       return { status: 'success' };
     } catch (err) {
@@ -390,11 +454,12 @@ export class ProductService {
       );
 
       if (type !== 'resident') {
-        const response: AxiosResponse<ActiveProxy> = await this.proxySeller.get(
+        const response = await this.getProviderData<ActiveProxy>(
           `/proxy/list/${type}`,
+          PROVIDER_LIST_CACHE,
         );
 
-        if (response.data.status !== 'success') {
+        if (response.status !== 'success') {
           return {
             status: 'error',
             message: 'Invalid response from proxy provider',
@@ -402,7 +467,7 @@ export class ProductService {
         }
 
         const filteredItems =
-          response.data.data.items
+          response.data.items
             ?.filter((item) => Boolean(getOwnedOrderId(item)))
             ?.map(
               ({
@@ -466,8 +531,11 @@ export class ProductService {
         console.log(
           '[getActiveProxyList] Fetching resident packages from ProxySeller',
         );
-        const traffic = await this.proxySeller.get(`/residentsubuser/packages`);
-        const packages = traffic.data.data || [];
+        const traffic = await this.getProviderData<any>(
+          '/residentsubuser/packages',
+          PROVIDER_LIST_CACHE,
+        );
+        const packages = traffic.data || [];
         console.log(
           `[getActiveProxyList] Got ${packages.length} packages from ProxySeller`,
         );
@@ -484,16 +552,17 @@ export class ProductService {
           console.log(
             `[getActiveProxyList] Fetching lists for package_key: ${proxySellerId}`,
           );
-          const response = await this.proxySeller.get(
+          const response = await this.getProviderData<any>(
             `/residentsubuser/lists?package_key=${proxySellerId}`,
+            PROVIDER_LIST_CACHE,
           );
           console.log(
-            `[getActiveProxyList] Lists response for ${proxySellerId}: status=${response.data.status}, items=${response.data.data?.length ?? 0}`,
+            `[getActiveProxyList] Lists response for ${proxySellerId}: status=${response.status}, items=${response.data?.length ?? 0}`,
           );
 
-          if (response.data.status !== 'success') {
+          if (response.status !== 'success') {
             console.warn(
-              `[getActiveProxyList] Skipping ${proxySellerId} - status: ${response.data.status}`,
+              `[getActiveProxyList] Skipping ${proxySellerId} - status: ${response.status}`,
             );
             continue;
           }
@@ -508,7 +577,7 @@ export class ProductService {
 
           result.push({
             package_info: foundPackage,
-            package_list: response.data.data ?? null,
+            package_list: response.data ?? null,
             orderId: residentOrder?.id,
             order_number: residentOrder?.orderNumber,
             tariff: residentOrder?.tariff,
@@ -531,7 +600,14 @@ export class ProductService {
         };
       }
     } catch (error) {
-      console.error('Error fetching active proxy list:', error);
+      console.error('Error fetching active proxy list', {
+        type,
+        status: axios.isAxiosError(error) ? error.response?.status : undefined,
+        message:
+          error instanceof HttpException
+            ? error.message
+            : 'Provider read failed',
+      });
       return {
         status: 'error',
         message: 'Error fetching active proxy list',
@@ -609,13 +685,19 @@ export class ProductService {
           orderNumber: response.data.data.listBaseOrderNumbers?.[0],
           package_key: undefined,
         };
+        this.invalidateProviderReads(`/proxy/list/${orderInfo.type}`);
         console.log('[PRODUCT.SERVICE] Returning non-resident result:', result);
         return result;
       } else {
-        return await new ResidentProvisioner(
+        const result = await new ResidentProvisioner(
           this.prisma,
           this.proxySeller,
         ).provision(orderInfo);
+        this.invalidateProviderReads(
+          '/residentsubuser/packages',
+          '/residentsubuser/lists',
+        );
+        return result;
       }
     } catch (error) {
       // Axios errors include the API key in config.baseURL; log only safe fields.
@@ -714,6 +796,7 @@ export class ProductService {
         ).toLocaleDateString('ru-RU'),
       },
     });
+    this.invalidateProviderReads(`/proxy/list/${data.type}`);
     return { status: 'success' };
   }
 
@@ -1096,10 +1179,11 @@ export class ProductService {
 
     // Check package status before attempting to create
     try {
-      const packagesResp = await this.proxySeller.get(
+      const packagesResp = await this.getProviderData<any>(
         '/residentsubuser/packages',
+        PROVIDER_LIST_CACHE,
       );
-      const packages = packagesResp.data.data || [];
+      const packages = packagesResp.data || [];
       const pkg = packages.find((p: any) => p.package_key === data.package_key);
       console.log(
         '[modifyProxyResident] Package lookup result:',
@@ -1174,6 +1258,10 @@ export class ProductService {
       throw new HttpException(response.data.errors[0].message, 400);
     }
 
+    this.invalidateProviderReads(
+      '/residentsubuser/packages',
+      `/residentsubuser/lists?package_key=${data.package_key}`,
+    );
     console.log('[modifyProxyResident] Success');
     return {
       status: 'success',
@@ -1210,6 +1298,10 @@ export class ProductService {
       return { status: 'error', error: response.data.error };
     }
 
+    this.invalidateProviderReads(
+      '/residentsubuser/packages',
+      `/residentsubuser/lists?package_key=${packageKey}`,
+    );
     return { status: 'success' };
   }
 
@@ -1225,6 +1317,10 @@ export class ProductService {
         package_key: packageKey,
         title: title,
       });
+      this.invalidateProviderReads(
+        '/residentsubuser/packages',
+        `/residentsubuser/lists?package_key=${packageKey}`,
+      );
     }
 
     if (rotation) {
@@ -1233,8 +1329,11 @@ export class ProductService {
         package_key: packageKey,
         rotation: rotation,
       });
+      this.invalidateProviderReads(
+        '/residentsubuser/packages',
+        `/residentsubuser/lists?package_key=${packageKey}`,
+      );
     }
-
     return { status: 'success' };
   }
 

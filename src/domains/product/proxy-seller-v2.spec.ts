@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { ProviderOrderRejectedException } from './provider-order-rejected.exception';
 import { ProductService } from './product.service';
 
 describe('Proxy-Seller v2 purchase contract', () => {
@@ -85,6 +86,134 @@ describe('Proxy-Seller v2 purchase contract', () => {
         sectionCode: 'isp',
       }),
     );
+  });
+
+  it('classifies an explicit upstream rejection as safe to retry', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn().mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 403, data: { message: 'Forbidden' } },
+    });
+
+    await expect(
+      service.placeOrder({
+        type: 'ipv6',
+        orderId: 'local-order',
+        userId: 'customer',
+        countryId: 'GBR',
+        periodId: '1m',
+        paymentId: 1,
+        quantity: 13,
+        protocol: 'SOCKS5',
+      } as any),
+    ).rejects.toBeInstanceOf(ProviderOrderRejectedException);
+  });
+
+  it('does not classify an upstream server error as safe to retry', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn().mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 502 },
+    });
+
+    await expect(
+      service.placeOrder({
+        type: 'ipv6',
+        orderId: 'local-order',
+        userId: 'customer',
+        countryId: 'GBR',
+        periodId: '1m',
+        paymentId: 1,
+        quantity: 13,
+        protocol: 'SOCKS5',
+      } as any),
+    ).rejects.not.toBeInstanceOf(ProviderOrderRejectedException);
+  });
+
+  it('classifies a provider business error as safe to retry', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn().mockResolvedValue({
+      data: {
+        status: 'error',
+        errors: [{ message: 'Order cannot be fulfilled' }],
+      },
+    });
+
+    await expect(
+      service.placeOrder({
+        type: 'isp',
+        orderId: 'local-order',
+        userId: 'customer',
+        countryId: 'USA',
+        periodId: '1m',
+        paymentId: 1,
+        quantity: 1,
+      } as any),
+    ).rejects.toBeInstanceOf(ProviderOrderRejectedException);
+  });
+
+  it('keeps a malformed success response for manual reconciliation', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn().mockResolvedValue({
+      data: { status: 'success', data: {} },
+    });
+
+    await expect(
+      service.placeOrder({
+        type: 'isp',
+        orderId: 'local-order',
+        userId: 'customer',
+        countryId: 'USA',
+        periodId: '1m',
+        paymentId: 1,
+        quantity: 1,
+      } as any),
+    ).rejects.not.toBeInstanceOf(ProviderOrderRejectedException);
+  });
+
+  it('keeps a malformed response without a status for manual reconciliation', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn().mockResolvedValue({ data: {} });
+
+    await expect(
+      service.placeOrder({
+        type: 'isp',
+        orderId: 'local-order',
+        userId: 'customer',
+        countryId: 'USA',
+        periodId: '1m',
+        paymentId: 1,
+        quantity: 1,
+      } as any),
+    ).rejects.not.toBeInstanceOf(ProviderOrderRejectedException);
+  });
+
+  it('does not classify a no-response transport failure as safe to retry', async () => {
+    const service = new ProductService(new ConfigService(), {} as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn().mockRejectedValue({
+      isAxiosError: true,
+      request: {},
+      message: 'timeout',
+    });
+
+    await expect(
+      service.placeOrder({
+        type: 'ipv6',
+        orderId: 'local-order',
+        userId: 'customer',
+        countryId: 'GBR',
+        periodId: '1m',
+        paymentId: 1,
+        quantity: 13,
+        protocol: 'SOCKS5',
+      } as any),
+    ).rejects.not.toBeInstanceOf(ProviderOrderRejectedException);
   });
 
   it('selects provider balance when extending an ISP proxy', async () => {

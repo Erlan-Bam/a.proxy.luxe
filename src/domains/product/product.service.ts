@@ -24,6 +24,7 @@ import { UpdateResident } from './dto/update-resident.dto';
 import { ProlongResidentDto } from './dto/prolong-resident.dto';
 import { IpAuthorizationRdo } from './rdo/ip-authorization.rdo';
 import { productReferenceFallback } from './product-reference-fallback';
+import { ProviderOrderRejectedException } from './provider-order-rejected.exception';
 
 @Injectable()
 export class ProductService {
@@ -588,13 +589,18 @@ export class ProductService {
           '[PRODUCT.SERVICE] Non-resident response:',
           JSON.stringify(response.data, null, 2),
         );
+        if (response.data?.status === 'error') {
+          throw new ProviderOrderRejectedException(
+            response.data?.errors?.[0]?.message || 'Failed to place an order',
+          );
+        }
         if (
           response.data?.status !== 'success' ||
           !response.data?.data?.orderId
         ) {
           throw new HttpException(
-            response.data?.errors?.[0]?.message || 'Failed to place an order',
-            400,
+            'Provider purchase requires reconciliation',
+            502,
           );
         }
 
@@ -624,6 +630,12 @@ export class ProductService {
       });
       if (error instanceof HttpException) {
         throw error;
+      }
+      if (axios.isAxiosError(error) && error.response?.status === 403) {
+        throw new ProviderOrderRejectedException(
+          'Provider rejected the order',
+          502,
+        );
       }
       throw new HttpException('Failed to place an order', 500);
     }

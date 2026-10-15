@@ -1,4 +1,5 @@
 import { ProxyType } from '@prisma/client';
+import { ProviderOrderRejectedException } from '../../product/provider-order-rejected.exception';
 import { OrderService } from './order.service';
 
 describe('OrderService', () => {
@@ -135,6 +136,78 @@ describe('OrderService', () => {
     expect(prisma.partnerTransaction.create).toHaveBeenCalledWith({
       data: { partnerId: 'partner', amount: 0.12 },
     });
+  });
+
+  it('returns a definitively rejected provider order to PENDING for retry', async () => {
+    productService.placeOrder.mockRejectedValue(
+      new ProviderOrderRejectedException('Provider rejected the order'),
+    );
+
+    await expect(service.finishOrder({ orderId: order.id })).rejects.toThrow(
+      'Provider rejected the order',
+    );
+
+    expect(prisma.order.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: order.id,
+        status: 'PROCESSING',
+        orderId: null,
+        orderNumber: null,
+        proxySellerId: null,
+      },
+      data: { status: 'PENDING' },
+    });
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not reopen an order that this request failed to claim', async () => {
+    prisma.order.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(service.finishOrder({ orderId: order.id })).rejects.toThrow(
+      'Order not found or already processed',
+    );
+
+    expect(prisma.order.updateMany).toHaveBeenCalledTimes(1);
+    expect(productService.placeOrder).not.toHaveBeenCalled();
+  });
+
+  it('keeps the order PROCESSING when the provider outcome is unknown', async () => {
+    productService.placeOrder.mockRejectedValue(new Error('socket timeout'));
+
+    await expect(service.finishOrder({ orderId: order.id })).rejects.toThrow(
+      'socket timeout',
+    );
+
+    expect(prisma.order.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('checkpoints provider identifiers before settling the local balance', async () => {
+    prisma.$transaction.mockRejectedValueOnce(
+      new Error('database unavailable'),
+    );
+
+    await expect(service.finishOrder({ orderId: order.id })).rejects.toThrow(
+      'database unavailable',
+    );
+
+    expect(prisma.order.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: order.id,
+        status: 'PROCESSING',
+        orderId: null,
+        orderNumber: null,
+        proxySellerId: null,
+      },
+      data: {
+        orderId: 'external-order-id',
+        orderNumber: 'external-order-number',
+        proxySellerId: 'external-order-id',
+      },
+    });
+    expect(prisma.order.updateMany.mock.invocationCallOrder[1]).toBeLessThan(
+      prisma.$transaction.mock.invocationCallOrder[0],
+    );
   });
 });
 

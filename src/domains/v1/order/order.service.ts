@@ -16,6 +16,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { UserService } from '../user/user.service';
 import { AdminLogQuery, buildAdminLogQueries } from './admin-log-query';
 import { matchesOrderCountry } from './country-name';
+import { ProviderOrderRejectedException } from '../../product/provider-order-rejected.exception';
 
 type AdminLogParams = AdminLogQuery & {
   ordersPage: number;
@@ -413,6 +414,8 @@ export class OrderService {
     }
 
     this.processingOrders.add(lockKey);
+    let orderClaimed = false;
+    let providerRequestStarted = false;
 
     try {
       // Phase 1: Mark order as PROCESSING (atomic, no conflict risk)
@@ -432,6 +435,7 @@ export class OrderService {
       if (updatedOrder.count === 0) {
         throw new BadRequestException('Order not found or already processed');
       }
+      orderClaimed = true;
 
       const order = await this.prisma.order.findUnique({
         where: { id: paymentDto.orderId },
@@ -466,11 +470,6 @@ export class OrderService {
       }
 
       if (new Decimal(user.balance).lt(totalPrice)) {
-        // Revert order status back to PENDING
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: { status: PaymentStatus.PENDING },
-        });
         throw new HttpException('Insufficient balance', 400);
       }
 
@@ -508,10 +507,35 @@ export class OrderService {
       };
 
       // Phase 2: Call external API (not retryable — only called once)
+      providerRequestStarted = true;
       const placedOrder = await this.productService.placeOrder(orderInfo);
       const package_key = placedOrder.package_key,
         externalOrderId = placedOrder.orderId,
         orderNumber = placedOrder.orderNumber;
+
+      // Record the provider result before any retryable local settlement work.
+      // If settlement fails, these IDs prevent an unsafe second purchase and
+      // give support enough information to reconcile the order.
+      const checkpoint = await this.prisma.order.updateMany({
+        where: {
+          id: order.id,
+          status: PaymentStatus.PROCESSING,
+          orderId: null,
+          orderNumber: null,
+          proxySellerId: null,
+        },
+        data: {
+          orderId: externalOrderId,
+          orderNumber,
+          proxySellerId: externalOrderId,
+        },
+      });
+      if (checkpoint.count !== 1) {
+        throw new HttpException(
+          'Provider purchase requires reconciliation',
+          409,
+        );
+      }
 
       // Phase 3: Retryable DB transaction (balance + order status + partner)
       const partnerId = user.referredBy?.partnerId ?? null;
@@ -610,6 +634,24 @@ export class OrderService {
       await this.userService.sendProxyEmail(user.email, lang);
 
       return response;
+    } catch (error) {
+      const canRetrySafely =
+        orderClaimed &&
+        (!providerRequestStarted ||
+          error instanceof ProviderOrderRejectedException);
+      if (canRetrySafely) {
+        await this.prisma.order.updateMany({
+          where: {
+            id: paymentDto.orderId,
+            status: PaymentStatus.PROCESSING,
+            orderId: null,
+            orderNumber: null,
+            proxySellerId: null,
+          },
+          data: { status: PaymentStatus.PENDING },
+        });
+      }
+      throw error;
     } finally {
       this.processingOrders.delete(lockKey);
       console.log('Finished processing order' + paymentDto.orderId);

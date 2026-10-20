@@ -3,6 +3,33 @@ import { ProviderOrderRejectedException } from './provider-order-rejected.except
 import { ProductService } from './product.service';
 
 describe('Proxy-Seller v2 purchase contract', () => {
+  it('uses v1 only for resident requests and keeps other requests on v2', async () => {
+    const service = new ProductService(
+      new ConfigService({ PROXY_SELLER: 'test-key' }),
+      {} as any,
+    );
+    const api = (service as any).proxySeller;
+    const baseUrls: string[] = [];
+    const adapter = jest.fn(async (config: { baseURL?: string }) => {
+      baseUrls.push(config.baseURL ?? '');
+      return {
+        data: { status: 'success', data: [] },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    });
+
+    await api.get('/residentsubuser/packages', { adapter });
+    await api.get('/proxy/list/isp', { adapter });
+
+    expect(baseUrls).toEqual([
+      'https://proxy-seller.com/personal/api/v1/test-key',
+      'https://proxy-seller.com/personal/api/v2/test-key',
+    ]);
+  });
+
   it('serves the purchase catalog locally without calling Proxy-Seller', async () => {
     const service = new ProductService(new ConfigService(), {} as any);
     const get = jest.fn();

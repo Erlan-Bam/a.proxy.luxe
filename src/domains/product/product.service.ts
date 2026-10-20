@@ -29,6 +29,7 @@ import {
   ProviderReadCache,
   ProviderReadCachePolicy,
 } from './provider-read-cache';
+import { proxySellerApiVersionForPath } from './proxy-seller-api-version';
 
 const PROVIDER_LIST_CACHE: ProviderReadCachePolicy = {
   ttlMs: 20 * 1000,
@@ -50,8 +51,15 @@ export class ProductService {
     private readonly configService: ConfigService,
     private prisma: PrismaService,
   ) {
+    const providerApiKey = configService.get<string>('PROXY_SELLER');
+    const providerApiRoot = 'https://proxy-seller.com/personal/api';
     this.proxySeller = axios.create({
-      baseURL: `https://proxy-seller.com/personal/api/v2/${configService.get<string>('PROXY_SELLER')}`,
+      baseURL: `${providerApiRoot}/v2/${providerApiKey}`,
+    });
+    this.proxySeller.interceptors.request.use((config) => {
+      const version = proxySellerApiVersionForPath(config.url ?? '');
+      config.baseURL = `${providerApiRoot}/${version}/${providerApiKey}`;
+      return config;
     });
   }
 

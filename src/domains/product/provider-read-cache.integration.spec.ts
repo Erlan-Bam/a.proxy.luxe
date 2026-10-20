@@ -96,6 +96,70 @@ describe('ProductService provider read cache', () => {
     expect(api.get).toHaveBeenCalledTimes(1);
   });
 
+  it('reads a nonresident list from v1 when Cloudflare blocks v2 with HTML 403', async () => {
+    const { service, api } = createService();
+    const legacyApi = (service as any).proxySellerV1;
+    api.get = jest.fn().mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 403,
+        headers: { 'content-type': 'text/html; charset=UTF-8' },
+      },
+    });
+    legacyApi.get = jest.fn().mockResolvedValue({
+      data: { status: 'success', data: { items: providerItems } },
+    });
+
+    const first = await service.getActiveProxyList('user-a', 'isp');
+    const second = await service.getActiveProxyList('user-b', 'isp');
+
+    expect(first).toMatchObject({
+      status: 'success',
+      data: { items: [{ id: 'proxy-a', orderId: 'local-a' }] },
+    });
+    expect(second).toMatchObject({
+      status: 'success',
+      data: { items: [{ id: 'proxy-b', orderId: 'local-b' }] },
+    });
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(legacyApi.get).toHaveBeenCalledTimes(1);
+    expect(legacyApi.get).toHaveBeenCalledWith('/proxy/list/isp');
+  });
+
+  it('does not retry a provider JSON 403 or server failure through v1', async () => {
+    const { service, api } = createService();
+    const legacyApi = (service as any).proxySellerV1;
+    legacyApi.get = jest.fn();
+    api.get = jest
+      .fn()
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: {
+          status: 403,
+          headers: { 'content-type': 'application/json' },
+        },
+      })
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 502, headers: { 'content-type': 'text/html' } },
+      });
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    try {
+      await expect(
+        service.getActiveProxyList('user-a', 'isp'),
+      ).resolves.toMatchObject({ status: 'error' });
+      await expect(
+        service.getActiveProxyList('user-a', 'isp'),
+      ).resolves.toMatchObject({ status: 'error' });
+      expect(legacyApi.get).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('invalidates cached authorizations after creating a new authorization', async () => {
     const { service, api } = createService();
     api.get = jest.fn().mockResolvedValue({

@@ -1,9 +1,6 @@
 export type ProxySellerApiVersion = 'v1' | 'v2';
 
-const RESIDENT_API_PREFIXES = [
-  '/resident/',
-  '/residentsubuser/',
-] as const;
+const RESIDENT_API_PREFIXES = ['/resident/', '/residentsubuser/'] as const;
 
 export const proxySellerApiVersionForPath = (
   path: string,

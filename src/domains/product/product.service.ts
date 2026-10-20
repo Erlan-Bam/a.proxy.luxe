@@ -45,6 +45,7 @@ const PROVIDER_AUTH_CACHE: ProviderReadCachePolicy = {
 @Injectable()
 export class ProductService {
   private readonly proxySeller: Axios;
+  private readonly proxySellerV1: Axios;
   private readonly providerReadCache = new ProviderReadCache();
 
   constructor(
@@ -55,6 +56,9 @@ export class ProductService {
     const providerApiRoot = 'https://proxy-seller.com/personal/api';
     this.proxySeller = axios.create({
       baseURL: `${providerApiRoot}/v2/${providerApiKey}`,
+    });
+    this.proxySellerV1 = axios.create({
+      baseURL: `${providerApiRoot}/v1/${providerApiKey}`,
     });
     this.proxySeller.interceptors.request.use((config) => {
       const version = proxySellerApiVersionForPath(config.url ?? '');
@@ -70,7 +74,22 @@ export class ProductService {
     return this.providerReadCache.get(
       path,
       policy,
-      async () => (await this.proxySeller.get(path)).data as T,
+      async () => {
+        try {
+          return (await this.proxySeller.get(path)).data as T;
+        } catch (error) {
+          const contentType = axios.isAxiosError(error)
+            ? String(error.response?.headers?.['content-type'] ?? '')
+            : '';
+          const canRetryWithV1 =
+            (path.startsWith('/proxy/list/') || path === '/auth/list') &&
+            axios.isAxiosError(error) &&
+            error.response?.status === 403 &&
+            contentType.toLowerCase().includes('text/html');
+          if (!canRetryWithV1) throw error;
+          return (await this.proxySellerV1.get(path)).data as T;
+        }
+      },
       (data) => this.isProviderReadCacheable(path, data),
     );
   }

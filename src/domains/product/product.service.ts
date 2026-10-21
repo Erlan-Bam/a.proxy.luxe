@@ -718,7 +718,7 @@ export class ProductService {
       } else {
         const result = await new ResidentProvisioner(
           this.prisma,
-          this.proxySeller,
+          this.proxySellerV1,
         ).provision(orderInfo);
         this.invalidateProviderReads(
           '/residentsubuser/packages',

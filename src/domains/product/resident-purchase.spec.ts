@@ -110,6 +110,7 @@ describe('resident purchase recovery', () => {
     };
     service = new ProductService(new ConfigService(), prisma);
     (service as any).proxySeller = api;
+    (service as any).proxySellerV1 = api;
     jest.spyOn(service, 'getActiveProxyList').mockImplementation(async () => ({
       status: 'success', data: { items: [{ package_info: structuredClone(packageInfo) }] },
     }) as any);
@@ -120,6 +121,45 @@ describe('resident purchase recovery', () => {
   afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
   const info = { type: 'resident' as const, orderId: 'checkout', userId: 'customer',
     tariff: '1 Gb', tariffId: 25208, paymentId: 1 };
+
+  it('buys a resident tariff through v1 when v2 purchase requests are blocked', async () => {
+    (service as any).proxySeller = {
+      ...api,
+      post: jest.fn(async () => {
+        throw Object.assign(new Error('Provider v2 blocked'), {
+          response: { status: 403 },
+        });
+      }),
+    };
+    (service as any).proxySellerV1 = api;
+
+    await expect(service.placeOrder(info)).resolves.toMatchObject({
+      orderId: '1266906093',
+      package_key: 'sub',
+    });
+    expect(packageInfo.traffic_limit).toBe('4294967296');
+  });
+
+  it('allocates a reserved 1 GB order from existing inventory without a second tariff purchase', async () => {
+    order.residentFulfillment = structuredClone({
+      stage: 'purchased',
+      purchaseMode: 'existing_inventory',
+      baseline: '0',
+      target: String(gb),
+      desiredExpiry: '30.10.2026',
+      charge: '2.4',
+      fundsReserved: true,
+    });
+
+    await expect(service.placeOrder(info)).resolves.toMatchObject({
+      package_key: 'sub',
+      end_date: '30.10.2026',
+    });
+    expect(api.post.mock.calls.map(([path]) => path)).toEqual([
+      '/residentsubuser/create',
+    ]);
+    expect(packageInfo.traffic_limit).toBe(String(gb));
+  });
 
   it('persists a successful tariff purchase before a subpackage error and does not buy again on retry', async () => {
     const normal = api.post.getMockImplementation();
@@ -137,7 +177,7 @@ describe('resident purchase recovery', () => {
     const result = await service.placeOrder(info);
     expect(result.orderId).toBe('1266906093');
     expect(api.post).toHaveBeenCalledWith('/order/make',
-      { tarifId: 25208, paymentId: 'balance' }, { timeout: 30000 });
+      { tarifId: 25208, paymentId: 1 }, { timeout: 30000 });
     expect(api.post.mock.calls.filter(([path]) => path === '/order/make')).toHaveLength(1);
     expect(packageInfo.traffic_limit).toBe('4294967296');
   });

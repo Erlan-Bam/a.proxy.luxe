@@ -20,6 +20,7 @@ export type ResidentCheckpoint = {
   desiredExpiry: string;
   expiry?: string;
   sourceOrderId?: string;
+  purchaseMode?: 'existing_inventory';
   charge?: string;
   discountCode?: string;
   couponReserved?: boolean;
@@ -315,7 +316,7 @@ export class ResidentProvisioner {
             '/order/make',
             {
               tarifId: info.tariffId,
-              paymentId: 'balance',
+              paymentId: info.paymentId,
             },
             { timeout: 30000 },
           )
@@ -377,7 +378,13 @@ export class ResidentProvisioner {
           409,
         );
       }
-      if (!providerOrderId)
+      if (
+        !providerOrderId &&
+        !(
+          checkpoint.purchaseMode === 'existing_inventory' &&
+          checkpoint.fundsReserved
+        )
+      )
         throw new HttpException(
           'Purchased tariff ID missing; contact support',
           409,

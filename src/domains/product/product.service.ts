@@ -468,6 +468,34 @@ export class ProductService {
           .filter((order) => order.orderNumber)
           .map((order) => [order.orderNumber, order.id]),
       );
+      const unnumberedOrderIds = new Set(
+        orders
+          .filter((order) => order.orderNumber === null)
+          .map((order) => order.id),
+      );
+      const legacyBaseOrderNumberMap = new Map<string, string>();
+      const ambiguousLegacyBases = new Set<string>();
+      if (type === 'isp') {
+        for (const order of orders) {
+          const match = /^(\d+_\d+)_e_[A-Za-z0-9]+$/.exec(
+            order.orderNumber ?? '',
+          );
+          if (
+            !match ||
+            match[1].split('_')[0] !== String(order.proxySellerId)
+          ) {
+            continue;
+          }
+          const baseOrderNumber = match[1];
+          if (ambiguousLegacyBases.has(baseOrderNumber)) continue;
+          if (legacyBaseOrderNumberMap.has(baseOrderNumber)) {
+            legacyBaseOrderNumberMap.delete(baseOrderNumber);
+            ambiguousLegacyBases.add(baseOrderNumber);
+          } else {
+            legacyBaseOrderNumberMap.set(baseOrderNumber, order.id);
+          }
+        }
+      }
       const getOwnedOrderId = (item: {
         order_id: string | number;
         order_number?: string;
@@ -475,7 +503,10 @@ export class ProductService {
       }) =>
         orderNumberMap.get(item.order_number ?? null) ??
         orderNumberMap.get(item.base_order_number ?? null) ??
-        proxySellerMap.get(String(item.order_id));
+        proxySellerMap.get(String(item.order_id)) ??
+        (item.base_order_number
+          ? legacyBaseOrderNumberMap.get(item.base_order_number)
+          : undefined);
       const orderByProxySellerId = new Map(
         orders.map((order) => [String(order.proxySellerId), order]),
       );
@@ -536,7 +567,12 @@ export class ProductService {
 
         await Promise.all(
           filteredItems
-            .filter((item) => item.order_number && item.orderId)
+            .filter(
+              (item) =>
+                item.order_number &&
+                item.orderId &&
+                unnumberedOrderIds.has(item.orderId),
+            )
             .map((item) =>
               this.prisma.order.updateMany({
                 where: {

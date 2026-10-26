@@ -268,10 +268,20 @@ describe('Proxy-Seller v2 purchase contract', () => {
       $transaction: jest.fn(async (callback) => callback(prisma)),
     };
     const service = new ProductService(new ConfigService(), prisma as any);
-    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
-      status: 'success',
-      data: { items: [{ id: '42', orderId: 'order', date_end: '30.10.2026' }] },
-    } as any);
+    jest
+      .spyOn(service, 'getActiveProxyList')
+      .mockResolvedValueOnce({
+        status: 'success',
+        data: {
+          items: [{ id: '42', orderId: 'order', date_end: '30.10.2026' }],
+        },
+      } as any)
+      .mockResolvedValue({
+        status: 'success',
+        data: {
+          items: [{ id: '42', orderId: 'order', date_end: '29.11.2026' }],
+        },
+      } as any);
     const api = (service as any).proxySeller;
     api.post = jest.fn().mockResolvedValue({
       data: { status: 'success', data: { orderId: 42 } },
@@ -325,15 +335,26 @@ describe('Proxy-Seller v2 purchase contract', () => {
       $transaction: jest.fn(async (callback) => callback(prisma)),
     };
     const service = new ProductService(new ConfigService(), prisma as any);
-    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
-      status: 'success',
-      data: {
-        items: [
-          { id: 'ip-1', orderId: 'order', date_end: '26.10.2026' },
-          { id: 'ip-2', orderId: 'order', date_end: '26.10.2026' },
-        ],
-      },
-    } as any);
+    jest
+      .spyOn(service, 'getActiveProxyList')
+      .mockResolvedValueOnce({
+        status: 'success',
+        data: {
+          items: [
+            { id: 'ip-1', orderId: 'order', date_end: '26.10.2026' },
+            { id: 'ip-2', orderId: 'order', date_end: '26.10.2026' },
+          ],
+        },
+      } as any)
+      .mockResolvedValue({
+        status: 'success',
+        data: {
+          items: [
+            { id: 'ip-1', orderId: 'order', date_end: '25.11.2026' },
+            { id: 'ip-2', orderId: 'order', date_end: '25.11.2026' },
+          ],
+        },
+      } as any);
     const api = (service as any).proxySeller;
     api.post = jest.fn().mockResolvedValue({
       data: { status: 'success', data: { orderId: 'renewal-1' } },
@@ -360,7 +381,12 @@ describe('Proxy-Seller v2 purchase contract', () => {
         orderId: 'renewal-1',
         totalPrice: 4.8,
         proxySellerId: null,
+        end_date: '25.11.2026',
       }),
+    });
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: 'order' },
+      data: { end_date: '25.11.2026' },
     });
   });
 
@@ -569,15 +595,26 @@ describe('Proxy-Seller v2 purchase contract', () => {
       $transaction: jest.fn(async (callback) => callback(prisma)),
     };
     const service = new ProductService(new ConfigService(), prisma as any);
-    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
-      status: 'success',
-      data: {
-        items: [
-          { id: 'ip-1', orderId: 'order', date_end: '2026-10-26' },
-          { id: 'ip-2', orderId: 'order', date_end: '2026-10-30' },
-        ],
-      },
-    } as any);
+    jest
+      .spyOn(service, 'getActiveProxyList')
+      .mockResolvedValueOnce({
+        status: 'success',
+        data: {
+          items: [
+            { id: 'ip-1', orderId: 'order', date_end: '2026-10-26' },
+            { id: 'ip-2', orderId: 'order', date_end: '2026-10-30' },
+          ],
+        },
+      } as any)
+      .mockResolvedValue({
+        status: 'success',
+        data: {
+          items: [
+            { id: 'ip-1', orderId: 'order', date_end: '2026-11-25' },
+            { id: 'ip-2', orderId: 'order', date_end: '2026-10-30' },
+          ],
+        },
+      } as any);
     (service as any).proxySeller.post = jest.fn().mockResolvedValue({
       data: { status: 'success', data: { orderId: 'renewal-provider' } },
     });
@@ -590,10 +627,69 @@ describe('Proxy-Seller v2 purchase contract', () => {
     } as any);
     expect(prisma.order.update).toHaveBeenCalledWith({
       where: { id: 'order' },
-      data: { end_date: '26.11.2026' },
+      data: { end_date: '25.11.2026' },
     });
     expect(prisma.order.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ quantity: 1, end_date: '26.11.2026' }),
+      data: expect.objectContaining({ quantity: 1, end_date: '25.11.2026' }),
+    });
+  });
+
+  it('keeps a three-month renewal pending if provider delivers only one month', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order',
+          userId: 'customer',
+          type: 'isp',
+          end_date: '26.10.2026',
+        }),
+        update: jest.fn(),
+        create: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ balance: 10 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn(),
+      },
+      proxyRenewalAttempt: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'attempt' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      $transaction: jest.fn(async (callback) => callback(prisma)),
+    };
+    const service = new ProductService(new ConfigService(), prisma as any);
+    jest
+      .spyOn(service, 'getActiveProxyList')
+      .mockResolvedValueOnce({
+        status: 'success',
+        data: {
+          items: [{ id: 'ip-1', orderId: 'order', date_end: '26.10.2026' }],
+        },
+      } as any)
+      .mockResolvedValue({
+        status: 'success',
+        data: {
+          items: [{ id: 'ip-1', orderId: 'order', date_end: '25.11.2026' }],
+        },
+      } as any);
+    (service as any).proxySeller.post = jest.fn().mockResolvedValue({
+      data: { status: 'success', data: { orderId: 'provider-renewal' } },
+    });
+    await expect(
+      service.prolongProxy({
+        orderId: 'order',
+        type: 'isp',
+        id: ['ip-1'],
+        periodId: '3m',
+        user: { id: 'customer' },
+      } as any),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(prisma.order.create).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.proxyRenewalAttempt.update).toHaveBeenCalledWith({
+      where: { id: 'attempt' },
+      data: { providerOrderId: 'provider-renewal' },
     });
   });
 });

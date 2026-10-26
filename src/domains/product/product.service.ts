@@ -1019,11 +1019,84 @@ export class ProductService {
       where: { id: attempt.id },
       data: { providerOrderId: String(providerOrderId) },
     });
+    let confirmedItems: Array<{
+      id: string;
+      orderId: string;
+      date_end: string;
+    }> | null = null;
+    for (let read = 0; read < 3; read++) {
+      this.invalidateProviderReads(`/proxy/list/${data.type}`);
+      try {
+        const current = await this.getActiveProxyList(order.userId, data.type);
+        if (current.status === 'success' && current.data?.items) {
+          const candidates = current.data.items.filter(
+            (item) => item.orderId === order.id,
+          );
+          const byId = new Map(
+            candidates.map((item) => [String(item.id), item]),
+          );
+          const allAdvanced = idsArray.every((id) => {
+            const actual = parseProxyExpiry(byId.get(id)?.date_end);
+            const before = parseProxyExpiry(expiresBefore[id]);
+            return (
+              actual &&
+              before &&
+              actual.getTime() - before.getTime() >=
+                months * 30 * 24 * 60 * 60 * 1000
+            );
+          });
+          if (allAdvanced) {
+            confirmedItems = candidates;
+            break;
+          }
+        }
+      } catch (error) {
+        // A paid provider response remains reserved for reconciliation.
+      }
+      if (read < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+    if (!confirmedItems) {
+      throw new HttpException('Provider renewal requires reconciliation', 503);
+    }
+    const confirmedExpiries: Record<string, string> = {};
+    for (const id of idsArray) {
+      const item = confirmedItems.find(
+        (candidate) => String(candidate.id) === id,
+      );
+      const actual = parseProxyExpiry(item?.date_end);
+      if (!actual) {
+        throw new HttpException(
+          'Provider renewal requires reconciliation',
+          503,
+        );
+      }
+      confirmedExpiries[id] = formatProxyExpiry(actual);
+    }
+    const confirmedSourceEndDate = formatProxyExpiry(
+      new Date(
+        Math.max(
+          ...confirmedItems.map(
+            (item) => parseProxyExpiry(item.date_end)?.getTime() ?? 0,
+          ),
+        ),
+      ),
+    );
+    const confirmedRenewalEndDate = formatProxyExpiry(
+      new Date(
+        Math.max(
+          ...idsArray.map(
+            (id) => parseProxyExpiry(confirmedExpiries[id])?.getTime() ?? 0,
+          ),
+        ),
+      ),
+    );
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.order.update({
           where: { id: data.orderId },
-          data: { end_date: sourceEndDate },
+          data: { end_date: confirmedSourceEndDate },
         });
         const localOrder = await tx.order.create({
           data: {
@@ -1039,7 +1112,7 @@ export class ProductService {
             totalPrice: currentPrice,
             orderId: String(providerOrderId),
             proxySellerId: null,
-            end_date: renewalEndDate,
+            end_date: confirmedRenewalEndDate,
           },
         });
         await tx.proxyRenewalAttempt.update({
@@ -1048,6 +1121,9 @@ export class ProductService {
             status: 'PAID',
             activeSourceOrderId: null,
             localOrderId: localOrder.id,
+            expiresAfter: confirmedExpiries,
+            sourceEndDate: confirmedSourceEndDate,
+            renewalEndDate: confirmedRenewalEndDate,
           },
         });
       });

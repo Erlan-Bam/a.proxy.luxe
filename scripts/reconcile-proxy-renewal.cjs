@@ -4,8 +4,9 @@ const { PrismaClient } = require('@prisma/client');
 
 const attemptId = process.argv[2];
 const releaseConfirmed = process.argv.includes('--release-confirmed');
+const providerConfirmed = process.argv.includes('--provider-confirmed');
 if (!attemptId || !/^[0-9a-f-]{36}$/i.test(attemptId)) {
-  process.stderr.write('Usage: node scripts/reconcile-proxy-renewal.cjs <attempt-uuid> [--release-confirmed]\n');
+  process.stderr.write('Usage: node scripts/reconcile-proxy-renewal.cjs <attempt-uuid> [--provider-confirmed|--release-confirmed]\n');
   process.exit(2);
 }
 
@@ -64,15 +65,19 @@ async function main() {
       throw new Error('Provider list is incomplete; attempt remains reserved');
     }
     const before = attempt.expiresBefore;
-    const expected = attempt.expiresAfter;
     const actual = ids.map((id) => parseDate(items.get(String(id)).date_end));
-    if (ids.some((id, index) => actual[index] === null || parseDate(before?.[id]) === null || parseDate(expected?.[id]) === null)) {
+    if (ids.some((id, index) => actual[index] === null || parseDate(before?.[id]) === null)) {
       throw new Error('Renewal expiry is unreadable; attempt remains reserved');
     }
-    const allRenewed = ids.every((id, index) => actual[index] >= parseDate(expected[id]));
+    const months = Number(String(attempt.periodId).slice(0, -1));
+    if (![1, 3, 6].includes(months) || attempt.periodId !== `${months}m`) {
+      throw new Error('Renewal period is unreadable; attempt remains reserved');
+    }
+    const minimumAdvance = months * 30 * 24 * 60 * 60 * 1000;
+    const allRenewed = ids.every((id, index) => actual[index] - parseDate(before[id]) >= minimumAdvance);
     const noneRenewed = ids.every((id, index) => actual[index] <= parseDate(before[id]));
 
-    if (allRenewed) {
+    if (allRenewed && (attempt.providerOrderId || providerConfirmed)) {
       await prisma.$transaction(async (tx) => {
         const claimed = await tx.proxyRenewalAttempt.updateMany({
           where: { id: attempt.id, status: 'PROCESSING' },
@@ -83,7 +88,6 @@ async function main() {
         if (!source) throw new Error('Source order missing');
         const sourceExpiry = Math.max(
           parseDate(source.end_date) ?? 0,
-          parseDate(attempt.sourceEndDate) ?? 0,
           ...actual,
         );
         await tx.order.update({
@@ -109,7 +113,12 @@ async function main() {
         });
         await tx.proxyRenewalAttempt.update({
           where: { id: attempt.id },
-          data: { localOrderId: local.id },
+          data: {
+            localOrderId: local.id,
+            expiresAfter: Object.fromEntries(ids.map((id, index) => [String(id), formatDate(actual[index])])),
+            sourceEndDate: formatDate(sourceExpiry),
+            renewalEndDate: formatDate(Math.max(...actual)),
+          },
         });
       });
       process.stdout.write(`Attempt ${attempt.id}: provider expiry verified; local renewal settled.\n`);

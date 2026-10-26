@@ -15,9 +15,9 @@ Apply `prisma/migrations/20261026100000_proxy_renewal_attempt` with `prisma migr
    node scripts/reconcile-proxy-renewal.cjs <attempt-uuid>
    ```
 
-   The command reads the provider's current proxy list. If every requested address has reached its expected expiry, it records the paid renewal in the local order history and releases the source-order lock. It does not charge the balance again. A second run reports the terminal status without another write.
+   The command reads the provider's current proxy list. It requires an advance of at least 30 days per purchased month for **every** requested address and a confirmed provider order ID before recording the provider's actual expiry in local history and releasing the source-order lock. If Proxy-Seller uses a shorter calendar period, leave the attempt pending and confirm the duration with provider support. The command does not charge the balance again. A second run reports the terminal status without another write.
 
-3. If the command reports `unresolved`, inspect the provider order and exact expiry dates with Proxy-Seller. The local balance remains reserved. A partial extension also remains unresolved and requires provider support before changing local state.
+3. If the command reports `unresolved`, inspect the provider order and exact expiry dates with Proxy-Seller. The local balance remains reserved. If the original call timed out and no provider order ID was captured, but Proxy-Seller confirms it performed the renewal, run `node scripts/reconcile-proxy-renewal.cjs <attempt-uuid> --provider-confirmed`. A partial extension remains unresolved and requires provider support before changing local state.
 4. Release the reservation only after Proxy-Seller confirms the renewal was **not** performed, the provider dates have not advanced, and at least 15 minutes have elapsed. Then run:
 
    ```sh

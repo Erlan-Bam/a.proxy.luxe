@@ -53,9 +53,12 @@ describe('balance guards preserve resident reservations', () => {
     async (type) => {
       const prisma = {
         order: {
-          findUnique: jest
-            .fn()
-            .mockResolvedValue({ id: 'order', userId: 'customer' }),
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'order',
+            userId: 'customer',
+            type,
+            end_date: '26.10.2026',
+          }),
           update: jest.fn(),
           create: jest.fn(),
         },
@@ -63,14 +66,24 @@ describe('balance guards preserve resident reservations', () => {
           findUnique: jest.fn().mockResolvedValue({ balance: 10 }),
           updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         },
+        proxyRenewalAttempt: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'attempt' }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+        $transaction: jest.fn(async (callback) => callback(prisma)),
       };
       const service = new ProductService(new ConfigService(), prisma as any);
+      jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
+        status: 'success',
+        data: {
+          items: [{ id: 'proxy-1', orderId: 'order', date_end: '26.10.2026' }],
+        },
+      } as any);
       (service as any).proxySeller = {
-        post: jest
-          .fn()
-          .mockResolvedValue({
-            data: { status: 'success', data: { orderId: 'provider' } },
-          }),
+        post: jest.fn().mockResolvedValue({
+          data: { status: 'success', data: { orderId: 'provider' } },
+        }),
       };
       await expect(
         service.prolongProxy({
@@ -78,8 +91,10 @@ describe('balance guards preserve resident reservations', () => {
           id: 'proxy-1',
           type,
           periodId: '1m',
+          user: { id: 'customer' },
         } as any),
-      ).rejects.toMatchObject({ status: 409 });
+      ).rejects.toMatchObject({ status: 400 });
+      expect((service as any).proxySeller.post).not.toHaveBeenCalled();
       expect(prisma.order.update).not.toHaveBeenCalled();
       expect(prisma.order.create).not.toHaveBeenCalled();
     },

@@ -259,8 +259,19 @@ describe('Proxy-Seller v2 purchase contract', () => {
         findUnique: jest.fn().mockResolvedValue({ balance: 10 }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      proxyRenewalAttempt: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'attempt' }),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      $transaction: jest.fn(async (callback) => callback(prisma)),
     };
     const service = new ProductService(new ConfigService(), prisma as any);
+    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
+      status: 'success',
+      data: { items: [{ id: '42', orderId: 'order', date_end: '30.10.2026' }] },
+    } as any);
     const api = (service as any).proxySeller;
     api.post = jest.fn().mockResolvedValue({
       data: { status: 'success', data: { orderId: 42 } },
@@ -272,15 +283,317 @@ describe('Proxy-Seller v2 purchase contract', () => {
         type: 'isp',
         id: '42',
         periodId: '1m',
+        user: { id: 'customer' },
       } as any);
       expect(api.post).toHaveBeenCalledWith(
         '/prolong/make/isp',
         expect.objectContaining({
           paymentId: 'balance',
+          ids: ['42'],
         }),
       );
     } finally {
       jest.restoreAllMocks();
     }
+  });
+
+  it('renews two owned ISP addresses as an array and records one atomic charge', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order',
+          userId: 'customer',
+          type: 'isp',
+          end_date: '26.10.2026',
+          quantity: 2,
+          periodDays: '30',
+          proxyType: 'HTTPS',
+          goal: 'test',
+        }),
+        update: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ balance: 10 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      proxyRenewalAttempt: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'attempt' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      $transaction: jest.fn(async (callback) => callback(prisma)),
+    };
+    const service = new ProductService(new ConfigService(), prisma as any);
+    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
+      status: 'success',
+      data: {
+        items: [
+          { id: 'ip-1', orderId: 'order', date_end: '26.10.2026' },
+          { id: 'ip-2', orderId: 'order', date_end: '26.10.2026' },
+        ],
+      },
+    } as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn().mockResolvedValue({
+      data: { status: 'success', data: { orderId: 'renewal-1' } },
+    });
+    await service.prolongProxy({
+      orderId: 'order',
+      type: 'isp',
+      id: 'ip-1, ip-2',
+      periodId: '1m',
+      user: { id: 'customer' },
+    } as any);
+    expect(api.post).toHaveBeenCalledWith('/prolong/make/isp', {
+      ids: ['ip-1', 'ip-2'],
+      periodId: '1m',
+      paymentId: 'balance',
+    });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'customer', balance: { gte: 4.8 } },
+      data: { balance: { decrement: 4.8 } },
+    });
+    expect(prisma.order.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        orderId: 'renewal-1',
+        totalPrice: 4.8,
+        proxySellerId: null,
+      }),
+    });
+  });
+
+  it('rejects addresses from another order before charging or contacting provider', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'order', userId: 'customer', type: 'isp' }),
+      },
+      user: { findUnique: jest.fn().mockResolvedValue({ balance: 10 }) },
+      proxyRenewalAttempt: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const service = new ProductService(new ConfigService(), prisma as any);
+    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
+      status: 'success',
+      data: { items: [{ id: 'ip-1', orderId: 'another-order' }] },
+    } as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn();
+    await expect(
+      service.prolongProxy({
+        orderId: 'order',
+        type: 'isp',
+        id: ['ip-1'],
+        periodId: '1m',
+        user: { id: 'customer' },
+      } as any),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('returns reserved funds when Proxy-Seller rejects a batch with HTTP 200', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'order', userId: 'customer', type: 'isp' }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ balance: 10 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      proxyRenewalAttempt: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'attempt' }),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      $transaction: jest.fn(async (callback) => callback(prisma)),
+    };
+    const service = new ProductService(new ConfigService(), prisma as any);
+    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
+      status: 'success',
+      data: {
+        items: [
+          { id: 'ip-1', orderId: 'order', date_end: '26.10.2026' },
+          { id: 'ip-2', orderId: 'order', date_end: '26.10.2026' },
+        ],
+      },
+    } as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn().mockResolvedValue({
+      status: 200,
+      data: {
+        status: 'error',
+        data: null,
+        errors: [{ code: 0, message: 'IP not found', customData: null }],
+      },
+    });
+    await expect(
+      service.prolongProxy({
+        orderId: 'order',
+        type: 'isp',
+        id: ['ip-1', 'ip-2'],
+        periodId: '1m',
+        user: { id: 'customer' },
+      } as any),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(prisma.user.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'customer' },
+      data: { balance: { increment: 4.8 } },
+    });
+  });
+
+  it('records an attempt before provider submission and blocks retry after an ambiguous timeout', async () => {
+    const callOrder: string[] = [];
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order',
+          userId: 'customer',
+          type: 'isp',
+          end_date: '26.10.2026',
+        }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ balance: 10 }),
+        updateMany: jest.fn(async () => {
+          callOrder.push('reserve');
+          return { count: 1 };
+        }),
+      },
+      proxyRenewalAttempt: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest
+          .fn()
+          .mockImplementationOnce(async () => {
+            callOrder.push('checkpoint');
+            return { id: 'attempt' };
+          })
+          .mockRejectedValue({ code: 'P2002' }),
+        update: jest.fn(),
+      },
+      $transaction: jest.fn(async (callback) => callback(prisma)),
+    };
+    const service = new ProductService(new ConfigService(), prisma as any);
+    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
+      status: 'success',
+      data: {
+        items: [{ id: 'ip-1', orderId: 'order', date_end: '26.10.2026' }],
+      },
+    } as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn(async () => {
+      callOrder.push('provider');
+      throw new Error('timeout');
+    });
+    const request = {
+      orderId: 'order',
+      type: 'isp',
+      id: ['ip-1'],
+      periodId: '1m',
+      user: { id: 'customer' },
+    };
+    await expect(service.prolongProxy(request as any)).rejects.toMatchObject({
+      status: 502,
+    });
+    await expect(service.prolongProxy(request as any)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(callOrder).toEqual(['checkpoint', 'reserve', 'provider']);
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a repeated paid renewal before checking the now lower balance', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order',
+          userId: 'customer',
+          type: 'isp',
+        }),
+      },
+      user: { findUnique: jest.fn() },
+      proxyRenewalAttempt: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'already-paid',
+          status: 'PAID',
+        }),
+      },
+    };
+    const service = new ProductService(new ConfigService(), prisma as any);
+    const api = (service as any).proxySeller;
+    api.post = jest.fn();
+    await expect(
+      service.prolongProxy({
+        orderId: 'order',
+        type: 'isp',
+        id: ['ip-1'],
+        periodId: '1m',
+        user: { id: 'customer' },
+      } as any),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('keeps the source expiry aligned with individual ISP addresses after a partial renewal', async () => {
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order',
+          userId: 'customer',
+          type: 'isp',
+          end_date: '30.10.2026',
+          quantity: 2,
+          goal: 'test',
+          proxyType: 'HTTPS',
+        }),
+        update: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({ id: 'renewal' }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ balance: 10 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      proxyRenewalAttempt: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'attempt' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      $transaction: jest.fn(async (callback) => callback(prisma)),
+    };
+    const service = new ProductService(new ConfigService(), prisma as any);
+    jest.spyOn(service, 'getActiveProxyList').mockResolvedValue({
+      status: 'success',
+      data: {
+        items: [
+          { id: 'ip-1', orderId: 'order', date_end: '2026-10-26' },
+          { id: 'ip-2', orderId: 'order', date_end: '2026-10-30' },
+        ],
+      },
+    } as any);
+    (service as any).proxySeller.post = jest.fn().mockResolvedValue({
+      data: { status: 'success', data: { orderId: 'renewal-provider' } },
+    });
+    await service.prolongProxy({
+      orderId: 'order',
+      type: 'isp',
+      id: ['ip-1'],
+      periodId: '1m',
+      user: { id: 'customer' },
+    } as any);
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: 'order' },
+      data: { end_date: '26.11.2026' },
+    });
+    expect(prisma.order.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ quantity: 1, end_date: '26.11.2026' }),
+    });
   });
 });

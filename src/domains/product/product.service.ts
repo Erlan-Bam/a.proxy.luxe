@@ -1,4 +1,5 @@
 import { HttpException, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import axios, { Axios } from 'axios';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -41,6 +42,37 @@ const PROVIDER_AUTH_CACHE: ProviderReadCachePolicy = {
   staleIfErrorMs: 60 * 1000,
   retryAfterErrorMs: 30 * 1000,
 };
+
+function parseProxyExpiry(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const european = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(value);
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!european && !iso) return null;
+  const year = Number(european?.[3] ?? iso?.[1]);
+  const month = Number(european?.[2] ?? iso?.[2]);
+  const day = Number(european?.[1] ?? iso?.[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+    ? date
+    : null;
+}
+
+function addProxyMonths(date: Date, months: number): Date {
+  const first = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1),
+  );
+  const lastDay = new Date(
+    Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  first.setUTCDate(Math.min(date.getUTCDate(), lastDay));
+  return first;
+}
+
+function formatProxyExpiry(date: Date): string {
+  return `${String(date.getUTCDate()).padStart(2, '0')}.${String(date.getUTCMonth() + 1).padStart(2, '0')}.${date.getUTCFullYear()}`;
+}
 
 @Injectable()
 export class ProductService {
@@ -793,6 +825,61 @@ export class ProductService {
       console.log('wow did not find order', data.orderId);
       throw new HttpException('Order not found', 404);
     }
+    if (
+      !data.user?.id ||
+      data.user.id !== order.userId ||
+      order.type !== data.type
+    ) {
+      throw new HttpException('Proxy order does not belong to user', 403);
+    }
+    if (data.type !== 'isp' && data.type !== 'ipv6') {
+      throw new HttpException('Use resident renewal endpoint', 400);
+    }
+    const idsArray = (
+      Array.isArray(data.id)
+        ? data.id
+        : typeof data.id === 'string'
+          ? data.id.split(',')
+          : []
+    )
+      .map((id) => (typeof id === 'string' ? id.trim() : ''))
+      .filter(Boolean);
+    if (!idsArray.length || new Set(idsArray).size !== idsArray.length) {
+      throw new HttpException('Invalid proxy IDs', 400);
+    }
+    const months = Number(data.periodId.slice(0, -1));
+    if (![1, 3, 6].includes(months) || data.periodId !== `${months}m`) {
+      throw new HttpException('Invalid renewal period', 400);
+    }
+    const requestKey = createHash('sha256')
+      .update(JSON.stringify([order.id, [...idsArray].sort(), data.periodId]))
+      .digest('hex');
+    const previous = await this.prisma.proxyRenewalAttempt.findFirst({
+      where: {
+        sourceOrderId: order.id,
+        requestKey,
+        status: 'PAID',
+        createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (previous) {
+      throw new HttpException(
+        'This renewal was recently completed; verify expiry before retrying',
+        409,
+      );
+    }
+    const owned = await this.getActiveProxyList(order.userId, data.type);
+    if (owned.status !== 'success' || !owned.data?.items) {
+      throw new HttpException('Unable to verify proxy ownership', 503);
+    }
+    const orderItems = owned.data.items.filter(
+      (item) => item.orderId === order.id,
+    );
+    const ownedIds = new Set(orderItems.map((item) => String(item.id)));
+    if (idsArray.some((id) => !ownedIds.has(id))) {
+      throw new HttpException('Proxy does not belong to order', 403);
+    }
     const user = await this.prisma.user.findUnique({
       where: { id: order.userId },
     });
@@ -800,65 +887,179 @@ export class ProductService {
       console.log('wow did not work because of user');
       throw new HttpException('User not found', 404);
     }
-    const idsArray = data.id
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
     const count = idsArray.length;
-
-    const currentPrice = count * (data.type === 'isp' ? 2.4 : 0.08);
+    const currentPrice = count * months * (data.type === 'isp' ? 2.4 : 0.08);
     if (new Decimal(user.balance).lt(currentPrice)) {
-      console.log(
-        'wow did not work because of user insufficient balance',
-        user,
-      );
       throw new HttpException('Insufficient balance', 400);
     }
-    const response = await this.proxySeller.post(`/prolong/make/${data.type}`, {
-      ids: data.id,
-      periodId: data.periodId,
-      paymentId: 'balance',
+    const requestedIds = new Set(idsArray);
+    const originalExpiry = parseProxyExpiry(order.end_date);
+    const expiresBefore: Record<string, string> = {};
+    const expiresAfter: Record<string, string> = {};
+    const expiryDates = orderItems.map((item) => {
+      const currentExpiry = parseProxyExpiry(item.date_end) ?? originalExpiry;
+      if (!currentExpiry) {
+        throw new HttpException('Unable to determine proxy expiry', 503);
+      }
+      if (requestedIds.has(String(item.id))) {
+        expiresBefore[String(item.id)] = formatProxyExpiry(currentExpiry);
+        expiresAfter[String(item.id)] = formatProxyExpiry(
+          addProxyMonths(currentExpiry, months),
+        );
+      }
+      return {
+        id: String(item.id),
+        date: requestedIds.has(String(item.id))
+          ? addProxyMonths(currentExpiry, months)
+          : currentExpiry,
+      };
     });
-    console.log('response', response.data);
-    if (response.data.status !== 'success') {
-      throw new HttpException('Invalid data', 400);
+    const sourceEndDate = formatProxyExpiry(
+      new Date(
+        Math.max(
+          originalExpiry?.getTime() ?? 0,
+          ...expiryDates.map((item) => item.date.getTime()),
+        ),
+      ),
+    );
+    const renewalEndDate = formatProxyExpiry(
+      new Date(
+        Math.max(
+          ...expiryDates
+            .filter((item) => requestedIds.has(item.id))
+            .map((item) => item.date.getTime()),
+        ),
+      ),
+    );
+    let attempt;
+    try {
+      attempt = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.proxyRenewalAttempt.create({
+          data: {
+            sourceOrderId: order.id,
+            activeSourceOrderId: order.id,
+            userId: order.userId,
+            type: data.type,
+            ids: idsArray,
+            periodId: data.periodId,
+            requestKey,
+            amount: currentPrice,
+            expiresBefore,
+            expiresAfter,
+            sourceEndDate,
+            renewalEndDate,
+            status: 'PROCESSING',
+          },
+        });
+        const reserved = await tx.user.updateMany({
+          where: { id: order.userId, balance: { gte: currentPrice } },
+          data: { balance: { decrement: currentPrice } },
+        });
+        if (reserved.count !== 1) {
+          throw new HttpException('Insufficient balance', 400);
+        }
+        return created;
+      });
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new HttpException('Renewal is pending confirmation', 409);
+      }
+      throw error;
     }
-    const debit = await this.prisma.user.updateMany({
-      where: { id: order.userId, balance: { gte: currentPrice } },
-      data: {
-        balance: { decrement: currentPrice },
-      },
+    let response;
+    try {
+      response = await this.proxySeller.post(`/prolong/make/${data.type}`, {
+        ids: idsArray,
+        periodId: data.periodId,
+        paymentId: 'balance',
+      });
+    } catch (error) {
+      console.warn('[PRODUCT.SERVICE] Proxy renewal request failed', {
+        orderId: order.id,
+        type: data.type,
+        status: error.response?.status,
+      });
+      throw new HttpException('Provider renewal request failed', 502);
+    }
+    if (!response.data?.status) {
+      throw new HttpException('Provider renewal requires reconciliation', 503);
+    }
+    if (response.data.status === 'error') {
+      const providerMessage = response.data.errors?.[0]?.message;
+      console.warn('[PRODUCT.SERVICE] Proxy renewal rejected', {
+        orderId: order.id,
+        type: data.type,
+        providerMessage:
+          typeof providerMessage === 'string'
+            ? providerMessage
+            : 'Unknown provider error',
+      });
+      await this.prisma.$transaction(async (tx) => {
+        const canceled = await tx.proxyRenewalAttempt.updateMany({
+          where: { id: attempt.id, status: 'PROCESSING' },
+          data: { status: 'CANCELED', activeSourceOrderId: null },
+        });
+        if (canceled.count === 1) {
+          await tx.user.update({
+            where: { id: order.userId },
+            data: { balance: { increment: currentPrice } },
+          });
+        }
+      });
+      throw new HttpException('Provider rejected renewal', 502);
+    }
+    if (response.data.status !== 'success') {
+      throw new HttpException('Provider renewal requires reconciliation', 503);
+    }
+    const providerOrderId = response.data.data?.orderId;
+    if (!providerOrderId) {
+      throw new HttpException('Provider renewal requires reconciliation', 503);
+    }
+    await this.prisma.proxyRenewalAttempt.update({
+      where: { id: attempt.id },
+      data: { providerOrderId: String(providerOrderId) },
     });
-    if (debit.count !== 1)
-      throw new HttpException(
-        'Insufficient balance; provider renewal requires reconciliation',
-        409,
-      );
-    await this.prisma.order.update({
-      where: { id: data.orderId },
-      data: {
-        end_date: await this.getNextMonthDate(order.end_date),
-      },
-    });
-    await this.prisma.order.create({
-      data: {
-        type: order.type,
-        userId: order.userId,
-        country: order.country,
-        quantity: order.quantity,
-        periodDays: order.periodDays,
-        proxyType: order.proxyType,
-        status: 'PAID',
-        goal: order.goal,
-        tariff: order.tariff,
-        totalPrice: currentPrice,
-        orderId: `${response.data.data.orderId}`,
-        proxySellerId: `${response.data.data.orderId}`,
-        end_date: new Date(
-          Date.now() + 30 * 24 * 60 * 60 * 1000,
-        ).toLocaleDateString('ru-RU'),
-      },
-    });
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.order.update({
+          where: { id: data.orderId },
+          data: { end_date: sourceEndDate },
+        });
+        const localOrder = await tx.order.create({
+          data: {
+            type: order.type,
+            userId: order.userId,
+            country: order.country,
+            quantity: count,
+            periodDays: order.periodDays,
+            proxyType: order.proxyType,
+            status: 'PAID',
+            goal: order.goal,
+            tariff: order.tariff,
+            totalPrice: currentPrice,
+            orderId: String(providerOrderId),
+            proxySellerId: null,
+            end_date: renewalEndDate,
+          },
+        });
+        await tx.proxyRenewalAttempt.update({
+          where: { id: attempt.id },
+          data: {
+            status: 'PAID',
+            activeSourceOrderId: null,
+            localOrderId: localOrder.id,
+          },
+        });
+      });
+    } catch (error) {
+      console.error('[PRODUCT.SERVICE] Provider renewal needs reconciliation', {
+        orderId: order.id,
+        type: data.type,
+        providerOrderId: String(providerOrderId),
+      });
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Provider renewal requires reconciliation', 503);
+    }
     this.invalidateProviderReads(`/proxy/list/${data.type}`);
     return { status: 'success' };
   }

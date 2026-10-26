@@ -137,6 +137,29 @@ model Order {
   @@index([orderNumber])
 }
 
+model ProxyRenewalAttempt {
+  id                  String        @id @default(uuid())
+  sourceOrderId       String
+  activeSourceOrderId String?       @unique
+  userId              String
+  type                Proxy
+  ids                 Json
+  periodId            String
+  requestKey          String
+  amount              Decimal
+  expiresBefore       Json
+  expiresAfter        Json
+  sourceEndDate       String
+  renewalEndDate      String
+  status              PaymentStatus @default(PROCESSING)
+  providerOrderId     String?
+  localOrderId        String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([sourceOrderId, requestKey, createdAt])
+}
+
 model Payment {
   id              String        @id @default(uuid())
   userId          String

@@ -30,7 +30,6 @@ import {
   ProviderReadCache,
   ProviderReadCachePolicy,
 } from './provider-read-cache';
-import { proxySellerApiVersionForPath } from './proxy-seller-api-version';
 
 const PROVIDER_LIST_CACHE: ProviderReadCachePolicy = {
   ttlMs: 20 * 1000,
@@ -77,7 +76,6 @@ function formatProxyExpiry(date: Date): string {
 @Injectable()
 export class ProductService {
   private readonly proxySeller: Axios;
-  private readonly proxySellerV1: Axios;
   private readonly providerReadCache = new ProviderReadCache();
 
   constructor(
@@ -88,14 +86,6 @@ export class ProductService {
     const providerApiRoot = 'https://proxy-seller.com/personal/api';
     this.proxySeller = axios.create({
       baseURL: `${providerApiRoot}/v2/${providerApiKey}`,
-    });
-    this.proxySellerV1 = axios.create({
-      baseURL: `${providerApiRoot}/v1/${providerApiKey}`,
-    });
-    this.proxySeller.interceptors.request.use((config) => {
-      const version = proxySellerApiVersionForPath(config.url ?? '');
-      config.baseURL = `${providerApiRoot}/${version}/${providerApiKey}`;
-      return config;
     });
   }
 
@@ -110,16 +100,10 @@ export class ProductService {
         try {
           return (await this.proxySeller.get(path)).data as T;
         } catch (error) {
-          const contentType = axios.isAxiosError(error)
-            ? String(error.response?.headers?.['content-type'] ?? '')
-            : '';
-          const canRetryWithV1 =
-            (path.startsWith('/proxy/list/') || path === '/auth/list') &&
-            axios.isAxiosError(error) &&
-            error.response?.status === 403 &&
-            contentType.toLowerCase().includes('text/html');
-          if (!canRetryWithV1) throw error;
-          return (await this.proxySellerV1.get(path)).data as T;
+          if (axios.isAxiosError(error) && error.response?.status === 403) {
+            this.invalidateProviderReads(path);
+          }
+          throw error;
         }
       },
       (data) => this.isProviderReadCacheable(path, data),
@@ -333,10 +317,13 @@ export class ProductService {
 
   async updateRotation(data: UpdateResident) {
     try {
-      await this.proxySeller.post('/residentsubuser/update', {
+      const response = await this.proxySeller.post('/residentsubuser/update', {
         rotation: data.rotation,
         package_key: data.package_key,
       });
+      if (response.data?.status !== 'success') {
+        throw new HttpException('Unable to update resident rotation', 502);
+      }
 
       this.invalidateProviderReads(
         '/residentsubuser/packages',
@@ -345,7 +332,8 @@ export class ProductService {
 
       return { status: 'success' };
     } catch (err) {
-      throw new HttpException('Try later', 403);
+      if (err instanceof HttpException) throw err;
+      throw new HttpException('Unable to update resident rotation', 502);
     }
   }
 
@@ -630,7 +618,10 @@ export class ProductService {
           '/residentsubuser/packages',
           PROVIDER_LIST_CACHE,
         );
-        const packages = traffic.data || [];
+        if (traffic?.status !== 'success' || !Array.isArray(traffic.data)) {
+          throw new HttpException('Resident packages unavailable', 502);
+        }
+        const packages = traffic.data;
         console.log(
           `[getActiveProxyList] Got ${packages.length} packages from ProxySeller`,
         );
@@ -655,11 +646,8 @@ export class ProductService {
             `[getActiveProxyList] Lists response for ${proxySellerId}: status=${response.status}, items=${response.data?.length ?? 0}`,
           );
 
-          if (response.status !== 'success') {
-            console.warn(
-              `[getActiveProxyList] Skipping ${proxySellerId} - status: ${response.status}`,
-            );
-            continue;
+          if (response?.status !== 'success' || !Array.isArray(response.data)) {
+            throw new HttpException('Resident proxy lists unavailable', 502);
           }
 
           const foundPackage = packages.find(
@@ -786,7 +774,7 @@ export class ProductService {
       } else {
         const result = await new ResidentProvisioner(
           this.prisma,
-          this.proxySellerV1,
+          this.proxySeller,
         ).provision(orderInfo);
         this.invalidateProviderReads(
           '/residentsubuser/packages',
@@ -1652,23 +1640,29 @@ export class ProductService {
     rotation?: number | undefined,
   ) {
     if (title) {
-      await this.proxySeller.post('/residentsubuser/list/rename', {
+      const response = await this.proxySeller.post('/residentsubuser/list/rename', {
         id: listId,
         package_key: packageKey,
         title: title,
       });
+      if (response.data?.status !== 'success') {
+        throw new HttpException('Unable to rename resident proxy list', 502);
+      }
       this.invalidateProviderReads(
         '/residentsubuser/packages',
         `/residentsubuser/lists?package_key=${packageKey}`,
       );
     }
 
-    if (rotation) {
-      await this.proxySeller.post('/residentsubuser/list/rotation', {
+    if (rotation !== undefined) {
+      const response = await this.proxySeller.post('/residentsubuser/list/rotation', {
         id: listId,
         package_key: packageKey,
         rotation: rotation,
       });
+      if (response.data?.status !== 'success') {
+        throw new HttpException('Unable to update resident list rotation', 502);
+      }
       this.invalidateProviderReads(
         '/residentsubuser/packages',
         `/residentsubuser/lists?package_key=${packageKey}`,

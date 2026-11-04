@@ -134,7 +134,6 @@ describe('ProductService.prolongResident', () => {
       post: jest.fn(),
     };
     (service as any).proxySeller = proxySeller;
-    (service as any).proxySellerV1 = proxySeller;
 
     prisma.order.findUnique.mockImplementation(async ({ where }) => {
       return structuredClone(
@@ -276,7 +275,7 @@ describe('ProductService.prolongResident', () => {
     expect(proxySeller.post).toHaveBeenNthCalledWith(
       1,
       '/order/make',
-      { tarifId: tariffId, paymentId: 1 },
+      { tarifId: tariffId, paymentId: 'balance' },
       { timeout: 30000 },
     );
     expect(proxySeller.post).toHaveBeenNthCalledWith(
@@ -422,7 +421,7 @@ describe('ProductService.prolongResident', () => {
     expect(proxySeller.post).toHaveBeenNthCalledWith(
       1,
       '/order/make',
-      { tarifId: '3-gb-ind1', paymentId: 1 },
+      { tarifId: '3-gb-ind1', paymentId: 'balance' },
       { timeout: 30000 },
     );
   });

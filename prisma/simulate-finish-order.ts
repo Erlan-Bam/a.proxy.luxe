@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const PROXY_SELLER_API_KEY = process.env.PROXY_SELLER || 'YOUR_API_KEY';
-const BASE_URL = `https://proxy-seller.com/personal/api/v1/${PROXY_SELLER_API_KEY}`;
+const BASE_URL = `https://proxy-seller.com/personal/api/v2/${PROXY_SELLER_API_KEY}`;
 
 async function main() {
   console.log('=== FINDING FAILED ORDERS (11 AM - 1 PM) ===\n');

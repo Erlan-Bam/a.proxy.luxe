@@ -41,21 +41,10 @@ async function main() {
     }
     if (!process.env.PROXY_SELLER) throw new Error('Provider configuration unavailable');
     const providerPath = `/proxy/list/${attempt.type}`;
-    const providerRoot = 'https://proxy-seller.com/personal/api';
-    let response;
-    try {
-      response = await axios.get(
-        `${providerRoot}/v2/${process.env.PROXY_SELLER}${providerPath}`,
-        { timeout: 15000 },
-      );
-    } catch (error) {
-      const contentType = String(error.response?.headers?.['content-type'] ?? '').toLowerCase();
-      if (error.response?.status !== 403 || !contentType.includes('text/html')) throw error;
-      response = await axios.get(
-        `${providerRoot}/v1/${process.env.PROXY_SELLER}${providerPath}`,
-        { timeout: 15000 },
-      );
-    }
+    const response = await axios.get(
+      `https://proxy-seller.com/personal/api/v2/${process.env.PROXY_SELLER}${providerPath}`,
+      { timeout: 15000 },
+    );
     if (response.data?.status !== 'success' || !Array.isArray(response.data.data?.items)) {
       throw new Error('Provider list unavailable; attempt remains reserved');
     }

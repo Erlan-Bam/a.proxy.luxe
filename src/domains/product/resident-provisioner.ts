@@ -316,7 +316,7 @@ export class ResidentProvisioner {
             '/order/make',
             {
               tarifId: info.tariffId,
-              paymentId: info.paymentId,
+              paymentId: 'balance',
             },
             { timeout: 30000 },
           )

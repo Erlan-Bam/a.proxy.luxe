@@ -96,9 +96,8 @@ describe('ProductService provider read cache', () => {
     expect(api.get).toHaveBeenCalledTimes(1);
   });
 
-  it('reads a nonresident list from v1 when Cloudflare blocks v2 with HTML 403', async () => {
+  it('fails a list read when v2 returns HTML 403 instead of serving v1 data', async () => {
     const { service, api } = createService();
-    const legacyApi = (service as any).proxySellerV1;
     api.get = jest.fn().mockRejectedValue({
       isAxiosError: true,
       response: {
@@ -106,30 +105,55 @@ describe('ProductService provider read cache', () => {
         headers: { 'content-type': 'text/html; charset=UTF-8' },
       },
     });
-    legacyApi.get = jest.fn().mockResolvedValue({
-      data: { status: 'success', data: { items: providerItems } },
-    });
 
-    const first = await service.getActiveProxyList('user-a', 'isp');
-    const second = await service.getActiveProxyList('user-b', 'isp');
-
-    expect(first).toMatchObject({
-      status: 'success',
-      data: { items: [{ id: 'proxy-a', orderId: 'local-a' }] },
-    });
-    expect(second).toMatchObject({
-      status: 'success',
-      data: { items: [{ id: 'proxy-b', orderId: 'local-b' }] },
-    });
-    expect(api.get).toHaveBeenCalledTimes(1);
-    expect(legacyApi.get).toHaveBeenCalledTimes(1);
-    expect(legacyApi.get).toHaveBeenCalledWith('/proxy/list/isp');
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    try {
+      const first = await service.getActiveProxyList('user-a', 'isp');
+      expect(first).toMatchObject({ status: 'error' });
+      expect(first).not.toHaveProperty('data.items');
+      expect(api.get).toHaveBeenCalledTimes(1);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
-  it('does not retry a provider JSON 403 or server failure through v1', async () => {
+  it('does not serve a stale proxy list after v2 rejects a refresh with 403', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-04T00:00:00Z') });
     const { service, api } = createService();
-    const legacyApi = (service as any).proxySellerV1;
-    legacyApi.get = jest.fn();
+    api.get = jest
+      .fn()
+      .mockResolvedValueOnce({
+        data: { status: 'success', data: { items: providerItems } },
+      })
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: {
+          status: 403,
+          headers: { 'content-type': 'text/html; charset=UTF-8' },
+        },
+      });
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    try {
+      await expect(service.getActiveProxyList('user-a', 'isp')).resolves.toMatchObject({
+        status: 'success',
+      });
+      jest.advanceTimersByTime(21_000);
+      await expect(service.getActiveProxyList('user-a', 'isp')).resolves.toMatchObject({
+        status: 'error',
+      });
+      expect(api.get).toHaveBeenCalledTimes(2);
+    } finally {
+      consoleError.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not hide a provider JSON 403 or server failure', async () => {
+    const { service, api } = createService();
     api.get = jest
       .fn()
       .mockRejectedValueOnce({
@@ -154,7 +178,7 @@ describe('ProductService provider read cache', () => {
       await expect(
         service.getActiveProxyList('user-a', 'isp'),
       ).resolves.toMatchObject({ status: 'error' });
-      expect(legacyApi.get).not.toHaveBeenCalled();
+      expect(api.get).toHaveBeenCalledTimes(2);
     } finally {
       consoleError.mockRestore();
     }
@@ -203,6 +227,73 @@ describe('ProductService provider read cache', () => {
       (service as any).getCurrentResidentTariffId('1 Gb'),
     ).resolves.toBe(777);
     expect(api.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a v2 resident package business error instead of an empty list', async () => {
+    const { service, api } = createService();
+    api.get = jest.fn().mockResolvedValue({
+      data: { status: 'error', data: null, errors: [{ code: 503, message: 'IP not allowed' }] },
+    });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await expect(service.getActiveProxyList('user-a', 'resident')).resolves.toMatchObject({
+        status: 'error',
+      });
+    } finally {
+      consoleError.mockRestore();
+      consoleLog.mockRestore();
+    }
+  });
+
+  it('reports a v2 resident list business error instead of successful emptiness', async () => {
+    const { service, api } = createService();
+    api.get = jest.fn(async (path: string) => ({
+      data: path === '/residentsubuser/packages'
+        ? { status: 'success', data: [{ package_key: 'provider-a', is_active: true }], errors: [] }
+        : { status: 'error', data: null, errors: [{ code: 503, message: 'IP not allowed' }] },
+    }));
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleLog = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await expect(service.getActiveProxyList('user-a', 'resident')).resolves.toMatchObject({
+        status: 'error',
+      });
+    } finally {
+      consoleError.mockRestore();
+      consoleLog.mockRestore();
+    }
+  });
+
+  it('does not report success when v2 rejects a resident package rotation', async () => {
+    const { service, api } = createService();
+    api.post = jest.fn().mockResolvedValue({
+      data: { status: 'error', data: null, errors: [{ code: 0, message: 'Invalid rotation' }] },
+    });
+    await expect(service.updateRotation({ package_key: 'provider-a', rotation: 60 } as any))
+      .rejects.toThrow();
+  });
+
+  it('does not submit rotation after v2 rejects a resident list rename', async () => {
+    const { service, api } = createService();
+    api.post = jest.fn().mockResolvedValue({
+      data: { status: 'error', data: null, errors: [{ code: 0, message: 'List not found' }] },
+    });
+    await expect(service.updateList(1, 'provider-a', 'Renamed', 60)).rejects.toThrow();
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends zero to v2 when a resident list selects rotation per request', async () => {
+    const { service, api } = createService();
+    api.post = jest.fn().mockResolvedValue({ data: { status: 'success', data: {}, errors: [] } });
+    await expect(service.updateList(1, 'provider-a', undefined, 0)).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(api.post).toHaveBeenCalledWith('/residentsubuser/list/rotation', {
+      id: 1,
+      package_key: 'provider-a',
+      rotation: 0,
+    });
   });
 
   it('does not cache a malformed successful proxy list', async () => {

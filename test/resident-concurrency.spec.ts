@@ -99,7 +99,6 @@ async function fixture() {
       prisma,
     );
     (service as any).proxySeller = api;
-    (service as any).proxySellerV1 = api;
     jest.spyOn(service, 'getProductReferenceByType').mockResolvedValue({
       status: 'success',
       tariffs: [

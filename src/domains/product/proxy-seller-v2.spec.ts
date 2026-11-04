@@ -3,7 +3,7 @@ import { ProviderOrderRejectedException } from './provider-order-rejected.except
 import { ProductService } from './product.service';
 
 describe('Proxy-Seller v2 purchase contract', () => {
-  it('uses v1 only for resident requests and keeps other requests on v2', async () => {
+  it('uses v2 for both resident and nonresident provider requests', async () => {
     const service = new ProductService(
       new ConfigService({ PROXY_SELLER: 'test-key' }),
       {} as any,
@@ -25,7 +25,7 @@ describe('Proxy-Seller v2 purchase contract', () => {
     await api.get('/proxy/list/isp', { adapter });
 
     expect(baseUrls).toEqual([
-      'https://proxy-seller.com/personal/api/v1/test-key',
+      'https://proxy-seller.com/personal/api/v2/test-key',
       'https://proxy-seller.com/personal/api/v2/test-key',
     ]);
   });

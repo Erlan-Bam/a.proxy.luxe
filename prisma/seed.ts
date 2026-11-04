@@ -13,7 +13,7 @@ async function main() {
       '⚠️  PROXY_SELLER_API_KEY is not set in environment variables',
     );
   } else {
-    const url = `https://proxy-seller.com/personal/api/v1/${apiKey}/residentsubuser/update`;
+    const url = `https://proxy-seller.com/personal/api/v2/${apiKey}/residentsubuser/update`;
     const payload = {
       is_active: true,
       package_key: 'c1f9ac948467f4e74a10',
@@ -30,7 +30,7 @@ async function main() {
 
       const data = await response.json();
 
-      const getURL = `https://proxy-seller.com/personal/api/v1/${apiKey}/residentsubuser/packages`;
+      const getURL = `https://proxy-seller.com/personal/api/v2/${apiKey}/residentsubuser/packages`;
       const getResponse = await fetch(getURL, {
         method: 'GET',
         headers: {

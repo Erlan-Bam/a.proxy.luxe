@@ -110,7 +110,6 @@ describe('resident purchase recovery', () => {
     };
     service = new ProductService(new ConfigService(), prisma);
     (service as any).proxySeller = api;
-    (service as any).proxySellerV1 = api;
     jest.spyOn(service, 'getActiveProxyList').mockImplementation(async () => ({
       status: 'success', data: { items: [{ package_info: structuredClone(packageInfo) }] },
     }) as any);
@@ -122,22 +121,29 @@ describe('resident purchase recovery', () => {
   const info = { type: 'resident' as const, orderId: 'checkout', userId: 'customer',
     tariff: '1 Gb', tariffId: 25208, paymentId: 1 };
 
-  it('buys a resident tariff through v1 when v2 purchase requests are blocked', async () => {
-    (service as any).proxySeller = {
-      ...api,
-      post: jest.fn(async () => {
-        throw Object.assign(new Error('Provider v2 blocked'), {
-          response: { status: 403 },
-        });
-      }),
-    };
-    (service as any).proxySellerV1 = api;
-
+  it('purchases a resident tariff using the v2 balance payment selector', async () => {
     await expect(service.placeOrder(info)).resolves.toMatchObject({
       orderId: '1266906093',
       package_key: 'sub',
     });
-    expect(packageInfo.traffic_limit).toBe('4294967296');
+    expect(api.post).toHaveBeenCalledWith(
+      '/order/make',
+      { tarifId: 25208, paymentId: 'balance' },
+      { timeout: 30000 },
+    );
+  });
+
+  it('keeps a rejected v2 resident purchase reserved for reconciliation', async () => {
+    api.post.mockRejectedValueOnce(
+      Object.assign(new Error('Provider v2 blocked'), {
+        response: { status: 403 },
+      }),
+    );
+
+    await expect(service.placeOrder(info)).rejects.toThrow('Failed to place an order');
+    expect(order.residentFulfillment.stage).toBe('purchase_requested');
+    expect(balance).toBe(7.6);
+    expect(api.post.mock.calls.map(([path]) => path)).toEqual(['/order/make']);
   });
 
   it('allocates a reserved 1 GB order from existing inventory without a second tariff purchase', async () => {
@@ -177,7 +183,7 @@ describe('resident purchase recovery', () => {
     const result = await service.placeOrder(info);
     expect(result.orderId).toBe('1266906093');
     expect(api.post).toHaveBeenCalledWith('/order/make',
-      { tarifId: 25208, paymentId: 1 }, { timeout: 30000 });
+      { tarifId: 25208, paymentId: 'balance' }, { timeout: 30000 });
     expect(api.post.mock.calls.filter(([path]) => path === '/order/make')).toHaveLength(1);
     expect(packageInfo.traffic_limit).toBe('4294967296');
   });

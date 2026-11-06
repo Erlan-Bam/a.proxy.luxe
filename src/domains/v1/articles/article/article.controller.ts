@@ -120,8 +120,18 @@ export class ArticleController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.articleService.findOne(id);
+  findOne(@Param('id') id: string, @Query('lang') lang?: Language) {
+    if (lang && !Object.values(Language).includes(lang)) throw new BadRequestException('Invalid language');
+    return this.articleService.findOne(id, lang);
+  }
+
+  @Patch(':id/translation')
+  @UseGuards(AuthGuard('jwt'), AdminGuard)
+  setTranslation(@Param('id') id: string, @Body('translationId') translationId: string | null) {
+    if (translationId !== null && (typeof translationId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(translationId))) {
+      throw new BadRequestException('Invalid translation ID');
+    }
+    return this.articleService.setTranslation(id, translationId);
   }
 
   @Patch(':id')

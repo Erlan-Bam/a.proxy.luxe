@@ -1,4 +1,4 @@
-import { HttpException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { PrismaService } from '../../shared/prisma.service';
@@ -108,7 +108,7 @@ export class ArticleService {
     };
   }
 
-  async findOne(identifier: string) {
+  async findOne(identifier: string, lang?: Language) {
     // Check if identifier is a UUID (for backward compatibility with admin panel)
     const isUUID =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -127,6 +127,8 @@ export class ArticleService {
         slug: true,
         createdAt: true,
         updatedAt: true,
+        translation: { select: { id: true, slug: true, lang: true } },
+        translatedBy: { select: { id: true, slug: true, lang: true } },
         tags: {
           // ТЕГИ
           select: {
@@ -144,7 +146,61 @@ export class ArticleService {
       throw new NotFoundException('Article not found');
     }
 
-    return article;
+    const translation = article.translation ?? article.translatedBy;
+    if (lang && article.lang !== lang) {
+      if (!translation || translation.lang !== lang) {
+        throw new NotFoundException('Article not found in requested language');
+      }
+      return this.findOne(translation.id);
+    }
+
+    const { translatedBy: _translatedBy, ...result } = article;
+    return { ...result, translation };
+  }
+
+  async setTranslation(id: string, translationId: string | null) {
+    const source = await this.prisma.article.findUnique({
+      where: { id },
+      select: { id: true, lang: true },
+    });
+    if (!source) throw new NotFoundException('Article not found');
+
+    if (translationId === null) {
+      if (source.lang === Language.en) {
+        await this.prisma.article.update({ where: { id }, data: { translationId: null } });
+      } else {
+        await this.prisma.article.updateMany({ where: { translationId: id }, data: { translationId: null } });
+      }
+      return this.findOne(id);
+    }
+
+    if (id === translationId) throw new BadRequestException('An article cannot translate itself');
+    const target = await this.prisma.article.findUnique({
+      where: { id: translationId },
+      select: { id: true, lang: true },
+    });
+    if (!target) throw new NotFoundException('Translation article not found');
+    if (source.lang === target.lang) {
+      throw new BadRequestException('Translations must have different languages');
+    }
+
+    const enId = source.lang === Language.en ? id : translationId;
+    const ruId = source.lang === Language.ru ? id : translationId;
+    const existing = await this.prisma.article.findFirst({
+      where: { translationId: ruId, id: { not: enId } },
+      select: { id: true },
+    });
+    if (existing) throw new ConflictException('Russian article already has an English translation');
+
+    try {
+      await this.prisma.article.update({ where: { id: enId }, data: { translationId: ruId } });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2002') {
+        throw new ConflictException('Russian article already has an English translation');
+      }
+      throw error;
+    }
+    return this.findOne(id);
   }
 
   async update(id: string, updateArticleDto: UpdateArticleDto) {

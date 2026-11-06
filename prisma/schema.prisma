@@ -95,6 +95,9 @@ model Article {
   images         String[]
   mainImage      String?
   slug           String   @default("")
+  translationId  String?  @unique
+  translation    Article? @relation("ArticleTranslation", fields: [translationId], references: [id], onDelete: SetNull)
+  translatedBy   Article? @relation("ArticleTranslation")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt @default(now())
   tags           Tag[]

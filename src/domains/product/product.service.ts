@@ -626,9 +626,17 @@ export class ProductService {
           `[getActiveProxyList] Got ${packages.length} packages from ProxySeller`,
         );
 
-        const proxySellerIds = orders.map((order) =>
-          String(order.proxySellerId),
+        const packageByKey = new Map<string, any>(
+          packages.map((item) => [String(item.package_key), item]),
         );
+        const proxySellerIds = orders
+          .filter((order) => {
+            const providerPackage = packageByKey.get(
+              String(order.proxySellerId),
+            );
+            return providerPackage && providerPackage.is_active !== false;
+          })
+          .map((order) => String(order.proxySellerId));
         console.log(
           `[getActiveProxyList] User orders proxySellerIds:`,
           JSON.stringify(proxySellerIds),
@@ -650,9 +658,7 @@ export class ProductService {
             throw new HttpException('Resident proxy lists unavailable', 502);
           }
 
-          const foundPackage = packages.find(
-            (p) => p.package_key === proxySellerId,
-          );
+          const foundPackage = packageByKey.get(proxySellerId);
           const residentOrder = orderByProxySellerId.get(proxySellerId);
           console.log(
             `[getActiveProxyList] Package ${proxySellerId}: found=${!!foundPackage}, is_active=${foundPackage?.is_active}, expired_at=${JSON.stringify(foundPackage?.expired_at)}, traffic_left=${foundPackage?.traffic_left}`,

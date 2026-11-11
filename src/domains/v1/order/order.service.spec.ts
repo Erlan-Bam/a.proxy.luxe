@@ -29,6 +29,8 @@ describe('OrderService', () => {
       updateMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
     },
     user: {
       findUnique: jest.fn(),
@@ -83,6 +85,33 @@ describe('OrderService', () => {
       productService as any,
       userService as any,
     );
+  });
+
+  it('returns paid and pending orders in the customer history, newest first', async () => {
+    const paid = { id: 'paid-order', status: 'PAID' };
+    const pending = { id: 'pending-order', status: 'PENDING' };
+    prisma.order.findMany.mockResolvedValue([paid, pending]);
+    prisma.order.count.mockResolvedValue(2);
+    prisma.$transaction.mockImplementationOnce((queries: Promise<unknown>[]) =>
+      Promise.all(queries),
+    );
+
+    const result = await service.findAll(order.userId, 1, 10);
+
+    expect(prisma.order.findMany).toHaveBeenCalledWith({
+      where: { userId: order.userId },
+      orderBy: { createdAt: 'desc' },
+      skip: 0,
+      take: 10,
+    });
+    expect(prisma.order.count).toHaveBeenCalledWith({
+      where: { userId: order.userId },
+    });
+    expect(result).toMatchObject({
+      data: [paid, pending],
+      total: 2,
+      totalPages: 1,
+    });
   });
 
   it('passes the selected IPv6 protocol to Proxy-Seller', async () => {

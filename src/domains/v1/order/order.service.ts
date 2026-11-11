@@ -161,12 +161,13 @@ export class OrderService {
 
     const [orders, total] = await this.prisma.$transaction([
       this.prisma.order.findMany({
-        where: { userId: userId, status: 'PENDING' },
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
         skip: skip,
         take: limit,
       }),
       this.prisma.order.count({
-        where: { userId: userId, status: 'PENDING' },
+        where: { userId },
       }),
     ]);
 

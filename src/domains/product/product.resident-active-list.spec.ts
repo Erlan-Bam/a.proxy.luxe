@@ -98,6 +98,62 @@ describe('ProductService resident active list', () => {
     );
   });
 
+  it('keeps an expired package visible for renewal when its lists remain available', async () => {
+    prisma.order.findMany.mockResolvedValue([orders[0]]);
+    const originalGet = get.getMockImplementation();
+    get.mockImplementation((path: string) =>
+      path === '/residentsubuser/lists?package_key=old-package'
+        ? Promise.resolve({ data: { status: 'success', data: [{ id: 30 }] } })
+        : originalGet!(path),
+    );
+
+    const result = await service.getActiveProxyList('user-id', 'resident');
+
+    expect(result).toMatchObject({
+      status: 'success',
+      data: {
+        items: [
+          {
+            orderId: 'old-order',
+            package_info: { is_active: false },
+            package_list: [{ id: 30 }],
+          },
+        ],
+      },
+    });
+    expect(get).toHaveBeenCalledWith(
+      '/residentsubuser/lists?package_key=old-package',
+    );
+  });
+
+  it('skips an unreadable expired package and returns another readable expired package', async () => {
+    const originalGet = get.getMockImplementation();
+    get.mockImplementation((path: string) => {
+      if (path === '/residentsubuser/packages') {
+        return Promise.resolve({
+          data: {
+            status: 'success',
+            data: [
+              { package_key: 'old-package', is_active: false },
+              { package_key: 'current-package', is_active: false },
+            ],
+          },
+        });
+      }
+      if (path === '/residentsubuser/lists?package_key=old-package') {
+        return Promise.reject(new Error('Provider denied old package'));
+      }
+      return originalGet!(path);
+    });
+
+    const result = await service.getActiveProxyList('user-id', 'resident');
+
+    expect(result).toMatchObject({
+      status: 'success',
+      data: { items: [{ orderId: 'current-order' }] },
+    });
+  });
+
   it('reports a provider error for a current active package', async () => {
     const originalGet = get.getMockImplementation();
     get.mockImplementation((path: string) =>

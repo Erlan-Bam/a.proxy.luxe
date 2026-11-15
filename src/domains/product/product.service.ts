@@ -629,36 +629,45 @@ export class ProductService {
         const packageByKey = new Map<string, any>(
           packages.map((item) => [String(item.package_key), item]),
         );
-        const proxySellerIds = orders
-          .filter((order) => {
-            const providerPackage = packageByKey.get(
-              String(order.proxySellerId),
-            );
-            return providerPackage && providerPackage.is_active !== false;
-          })
-          .map((order) => String(order.proxySellerId));
+        const providerOrders = orders.filter((order) =>
+          packageByKey.has(String(order.proxySellerId)),
+        );
+        const activeOrders = providerOrders.filter(
+          (order) =>
+            packageByKey.get(String(order.proxySellerId)).is_active !== false,
+        );
+        const proxySellerIds = (
+          activeOrders.length ? activeOrders : providerOrders
+        ).map((order) => String(order.proxySellerId));
         console.log(
           `[getActiveProxyList] User orders proxySellerIds:`,
           JSON.stringify(proxySellerIds),
         );
 
         for (const proxySellerId of proxySellerIds) {
+          const foundPackage = packageByKey.get(proxySellerId);
           console.log(
             `[getActiveProxyList] Fetching lists for package_key: ${proxySellerId}`,
           );
-          const response = await this.getProviderData<any>(
-            `/residentsubuser/lists?package_key=${proxySellerId}`,
-            PROVIDER_LIST_CACHE,
-          );
+          let response: any;
+          try {
+            response = await this.getProviderData<any>(
+              `/residentsubuser/lists?package_key=${proxySellerId}`,
+              PROVIDER_LIST_CACHE,
+            );
+          } catch (error) {
+            if (foundPackage?.is_active === false) continue;
+            throw error;
+          }
           console.log(
             `[getActiveProxyList] Lists response for ${proxySellerId}: status=${response.status}, items=${response.data?.length ?? 0}`,
           );
 
           if (response?.status !== 'success' || !Array.isArray(response.data)) {
+            if (foundPackage?.is_active === false) continue;
             throw new HttpException('Resident proxy lists unavailable', 502);
           }
 
-          const foundPackage = packageByKey.get(proxySellerId);
           const residentOrder = orderByProxySellerId.get(proxySellerId);
           console.log(
             `[getActiveProxyList] Package ${proxySellerId}: found=${!!foundPackage}, is_active=${foundPackage?.is_active}, expired_at=${JSON.stringify(foundPackage?.expired_at)}, traffic_left=${foundPackage?.traffic_left}`,

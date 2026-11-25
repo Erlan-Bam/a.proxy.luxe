@@ -683,6 +683,7 @@ export class OrderService {
     const existing = await this.prisma.order.findFirst({
       where: { id: orderId, userId },
     });
+    if (!existing) throw new NotFoundException('Order not found');
     if (existing?.type === 'resident') {
       return this.productService.withResidentLock(userId, async () => {
         const deleted = await this.prisma.order.deleteMany({
@@ -702,14 +703,20 @@ export class OrderService {
         return existing;
       });
     }
-    const order = await this.prisma.order.delete({
-      where: { userId: userId, id: orderId },
+    const deleted = await this.prisma.order.deleteMany({
+      where: {
+        id: orderId,
+        userId,
+        status: 'PENDING',
+        orderId: null,
+        orderNumber: null,
+        proxySellerId: null,
+      },
     });
-
-    if (!order) {
-      throw new HttpException('Invalid order id', 400);
-    }
-
-    return order;
+    if (deleted.count !== 1)
+      throw new BadRequestException(
+        'Cannot delete an order after processing has started',
+      );
+    return existing;
   }
 }

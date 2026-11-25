@@ -31,6 +31,9 @@ describe('OrderService', () => {
       update: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
+      findFirst: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
     },
     user: {
       findUnique: jest.fn(),
@@ -111,6 +114,52 @@ describe('OrderService', () => {
       data: [paid, pending],
       total: 2,
       totalPages: 1,
+    });
+  });
+
+  it('refuses to delete a paid ISP order and preserves its provider link', async () => {
+    const paidOrder = {
+      ...order,
+      type: 'isp',
+      status: 'PAID',
+      proxySellerId: 'provider-order',
+      orderId: 'provider-order',
+      orderNumber: 'NS_123',
+    };
+    prisma.order.findFirst.mockResolvedValue(paidOrder);
+    prisma.order.delete.mockResolvedValue(paidOrder);
+    prisma.order.deleteMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.deleteById(order.userId, order.id)).rejects.toThrow(
+      'Cannot delete an order after processing has started',
+    );
+    expect(prisma.order.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes only an unprocessed pending ISP order', async () => {
+    const pendingOrder = {
+      ...order,
+      type: 'isp',
+      status: 'PENDING',
+      proxySellerId: null,
+      orderId: null,
+      orderNumber: null,
+    };
+    prisma.order.findFirst.mockResolvedValue(pendingOrder);
+    prisma.order.deleteMany.mockResolvedValue({ count: 1 });
+
+    await expect(service.deleteById(order.userId, order.id)).resolves.toEqual(
+      pendingOrder,
+    );
+    expect(prisma.order.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: order.id,
+        userId: order.userId,
+        status: 'PENDING',
+        orderId: null,
+        orderNumber: null,
+        proxySellerId: null,
+      },
     });
   });
 
